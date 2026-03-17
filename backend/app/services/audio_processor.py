@@ -29,6 +29,7 @@ class AudioChunkMetadata:
     clipping_ratio: float  # Proportion of audio clipping
     audio_quality_score: float  # 0-1 quality estimate
     audio_hash: str  # Deterministic hash for consistency
+    audio_file_path: str  # Deterministic local audio chunk path
 
 
 class AudioProcessor:
@@ -88,6 +89,7 @@ class AudioProcessor:
         
         # Deterministic audio hash
         audio_hash = self._compute_audio_hash(video_file_path, chunk_id, start_sec, end_sec)
+        audio_file_path = self._build_audio_chunk_path(video_file_path, chunk_id)
         
         if self.audio_extraction_enabled:
             # Future: actual extraction with librosa/scipy here
@@ -121,6 +123,7 @@ class AudioProcessor:
             clipping_ratio=clipping_ratio,
             audio_quality_score=quality_score,
             audio_hash=audio_hash,
+            audio_file_path=audio_file_path,
         )
 
     def _compute_audio_hash(self, video_file: str, chunk_id: int, start_sec: int, end_sec: int) -> str:
@@ -128,3 +131,8 @@ class AudioProcessor:
         import hashlib
         data = f"{video_file}|{chunk_id}|{start_sec}|{end_sec}|sr={self.sample_rate}"
         return hashlib.md5(data.encode()).hexdigest()[:12]
+
+    def _build_audio_chunk_path(self, video_file: str, chunk_id: int) -> str:
+        """Deterministic local path where extracted chunk audio would be stored."""
+        safe_video = video_file.split("/")[-1].replace(".", "_")
+        return f"audio/{safe_video}/chunk_{chunk_id:04d}.wav"

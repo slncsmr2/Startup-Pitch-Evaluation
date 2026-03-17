@@ -1,8 +1,10 @@
 import logging
 from dataclasses import dataclass
 
+from app.core.config import settings
 from app.schemas import PitchInput
 from app.services.audio_processor import AudioChunkMetadata, AudioProcessor
+from app.services.transcriber import BaseLocalTranscriber, build_local_transcriber
 from app.services.video_processor import FrameExtractMetadata, VideoProcessor
 
 logger = logging.getLogger(__name__)
@@ -69,6 +71,18 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
     # Initialize processors for audio/video chunk metadata
     video_processor = VideoProcessor(frame_extraction_enabled=False)
     audio_processor = AudioProcessor(audio_extraction_enabled=False)
+    transcriber: BaseLocalTranscriber | None = None
+    if settings.use_local_transcriber:
+        transcriber = build_local_transcriber(
+            backend=settings.local_transcriber_backend,
+            model_path=settings.local_transcriber_model_path,
+            min_audio_quality=settings.transcriber_min_audio_quality,
+        )
+        logger.info(
+            "Local transcriber enabled | backend=%s | model_path=%s",
+            settings.local_transcriber_backend,
+            settings.local_transcriber_model_path or "<unset>",
+        )
     
     # Distribute transcript across timeline chunks
     sentences = [s.strip() for s in transcript.replace("\n", " ").split(".") if s.strip()]
@@ -115,6 +129,23 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
             text_excerpt=chunk_text,
             slide_context=slide_context,
         )
+
+        if transcriber is not None:
+            transcription = transcriber.transcribe_chunk(
+                audio_file_path=audio_metadata.audio_file_path,
+                audio_metadata=audio_metadata,
+                fallback_text=chunk_text,
+                language_hint=payload.language_hint,
+            )
+            chunk_text = transcription.text
+            alignment.text_excerpt = chunk_text
+            logger.debug(
+                "Chunk %s transcription | backend=%s | status=%s | confidence=%.2f",
+                chunk_idx,
+                transcription.backend,
+                transcription.status,
+                transcription.confidence,
+            )
         
         chunks.append(
             PitchChunk(

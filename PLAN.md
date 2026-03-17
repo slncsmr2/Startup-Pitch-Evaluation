@@ -83,19 +83,19 @@ Definition of done:
 1. ~~For any input video, aligned chunk artifacts are produced.~~
 2. ~~Chunk metadata is deterministic.~~
 
-## Phase 3: Local transcription module
+## ~~Phase 3: Local transcription module~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add `backend/app/services/transcriber.py` abstraction interface.
-2. Implement local backend A: Whisper local.
-3. Implement local backend B: faster-whisper local.
-4. Add confidence and fallback behavior for empty/low-quality audio chunks.
+1. ~~Add `backend/app/services/transcriber.py` abstraction interface.~~
+2. ~~Implement local backend A: Whisper local.~~
+3. ~~Implement local backend B: faster-whisper local.~~
+4. ~~Add confidence and fallback behavior for empty/low-quality audio chunks.~~
 
 Definition of done:
 
-1. No network usage during transcription.
-2. Stable transcript output for same input and settings.
+1. ~~No network usage during transcription.~~
+2. ~~Stable transcript output for same input and settings.~~
 
 ## Phase 4: Trainable multimodal model stack
 
