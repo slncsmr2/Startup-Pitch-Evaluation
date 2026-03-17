@@ -35,20 +35,22 @@ FastAPI Path (Optional for Frontend Only)
 
 ## Phase-wise execution
 
-## Phase 0: Migration controls
+## ~~Phase 0: Migration controls~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add feature flag `USE_HEURISTIC_PIPELINE` (default: true) for safe migration.
-2. Add feature flag `USE_LOCAL_TRANSCRIBER` (default: false until transcriber is ready).
-3. Add clear logging at pipeline start to show active mode.
+1. ~~Add feature flag `USE_HEURISTIC_PIPELINE` (default: true) for safe migration.~~
+2. ~~Add feature flag `USE_LOCAL_TRANSCRIBER` (default: false until transcriber is ready).~~
+3. ~~Add clear logging at pipeline start to show active mode.~~
 
 Definition of done:
 
-1. Existing tests still pass.
-2. Pipeline can switch modes without runtime crash.
+1. ~~Existing tests still pass.~~
+2. ~~Pipeline can switch modes without runtime crash.~~
 
 ## Phase 1: Dataset and labels foundation
+
+⏭️ SKIPPED - No dataset available yet. Proceeding with Phase 2 local preprocessing.
 
 Tasks:
 
@@ -67,19 +69,19 @@ Definition of done:
 2. Validation script passes on sample dataset.
 3. No startup/speaker overlap across splits.
 
-## Phase 2: Local preprocessing from video
+## ~~Phase 2: Local preprocessing from video~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add `backend/app/services/video_processor.py` for frame extraction per 5-second chunk.
-2. Add `backend/app/services/audio_processor.py` for audio extraction + mel features.
-3. Upgrade `backend/app/services/preprocessing.py` to use true timeline chunking from video duration.
-4. Persist chunk metadata for text/audio/visual alignment.
+1. ~~Add `backend/app/services/video_processor.py` for frame extraction per 5-second chunk.~~
+2. ~~Add `backend/app/services/audio_processor.py` for audio extraction + mel features.~~
+3. ~~Upgrade `backend/app/services/preprocessing.py` to use true timeline chunking from video duration.~~
+4. ~~Persist chunk metadata for text/audio/visual alignment.~~
 
 Definition of done:
 
-1. For any input video, aligned chunk artifacts are produced.
-2. Chunk metadata is deterministic.
+1. ~~For any input video, aligned chunk artifacts are produced.~~
+2. ~~Chunk metadata is deterministic.~~
 
 ## Phase 3: Local transcription module
 

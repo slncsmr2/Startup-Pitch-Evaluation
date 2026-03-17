@@ -1,3 +1,6 @@
+import logging
+
+from app.core.config import settings
 from app.schemas import (
     ChunkReport,
     DashboardSeriesPoint,
@@ -13,6 +16,8 @@ from app.services.reporting import build_feedback, build_investor_dashboard
 from app.services.risk import detect_risk_flags
 from app.services.scoring import score_chunk
 
+logger = logging.getLogger(__name__)
+
 
 class StartupPitchPipeline:
     def __init__(self, window_seconds: int = 5):
@@ -20,6 +25,13 @@ class StartupPitchPipeline:
         self.text_extractor = TextFeatureExtractor()
         self.visual_extractor = VisualFeatureExtractor()
         self.audio_extractor = AudioFeatureExtractor()
+        
+        # Log active pipeline mode
+        logger.info(
+            "Pipeline initialized | "
+            f"use_heuristic_pipeline={settings.use_heuristic_pipeline} | "
+            f"use_local_transcriber={settings.use_local_transcriber}"
+        )
 
     def evaluate(self, payload: PitchInput, request_id: str) -> EvaluationResponse:
         chunks = temporal_synchronize_and_segment(payload, self.window_seconds)
