@@ -1,0 +1,10 @@
+# Phase-5 GPU profile (same trainer now, device flag reserved for future)
+device: gpu
+epochs: 12
+learning_rate: 0.025
+train_samples: 200
+val_samples: 64
+test_samples: 64
+seed: 11
+checkpoint_dir: models/checkpoints
+checkpoint_name: training_gpu_checkpoint.json

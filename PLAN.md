@@ -97,61 +97,61 @@ Definition of done:
 1. ~~No network usage during transcription.~~
 2. ~~Stable transcript output for same input and settings.~~
 
-## Phase 4: Trainable multimodal model stack
+## ~~Phase 4: Trainable multimodal model stack~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add model package:
+1. ~~Add model package:~~
    - `backend/models/text_encoder.py`
    - `backend/models/visual_encoder.py`
    - `backend/models/audio_encoder.py`
    - `backend/models/fusion_head.py`
    - `backend/models/scoring_head.py`
-2. Replace heuristics in `backend/app/services/extractors.py` with model inference wrappers.
-3. Replace fixed fusion in `backend/app/services/fusion.py` with learned fusion module.
-4. Replace weighted formula in `backend/app/services/scoring.py` with learned multi-output scoring.
+2. ~~Replace heuristics in `backend/app/services/extractors.py` with model inference wrappers.~~
+3. ~~Replace fixed fusion in `backend/app/services/fusion.py` with learned fusion module.~~
+4. ~~Replace weighted formula in `backend/app/services/scoring.py` with learned multi-output scoring.~~
 
 Definition of done:
 
-1. Forward pass returns 10 metric scores, overall score, and confidence.
-2. Works on both CPU and GPU profiles.
+1. ~~Forward pass returns 10 metric scores, overall score, and confidence.~~
+2. ~~Works on both CPU and GPU profiles.~~
 
-## Phase 5: Training system
+## ~~Phase 5: Training system~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add training package:
+1. ~~Add training package:~~
    - `backend/training/dataset_loader.py`
    - `backend/training/trainer.py`
    - `backend/training/metrics.py`
    - `backend/training/losses.py`
-2. Add scripts:
+2. ~~Add scripts:~~
    - `backend/scripts/train.py`
    - `backend/scripts/evaluate.py`
-3. Add config files:
+3. ~~Add config files:~~
    - `backend/models/config/training_cpu.yaml`
    - `backend/models/config/training_gpu.yaml`
-4. Add checkpoint saving/loading under `backend/models/checkpoints`.
+4. ~~Add checkpoint saving/loading under `backend/models/checkpoints`.~~
 
 Definition of done:
 
-1. Train run completes and writes checkpoints.
-2. Eval run outputs MAE/RMSE and ranking metrics.
+1. ~~Train run completes and writes checkpoints.~~
+2. ~~Eval run outputs MAE/RMSE and ranking metrics.~~
 
-## Phase 6: CLI Inference Productization (ML development path)
+## ~~Phase 6: CLI Inference Productization (ML development path)~~ ✓ COMPLETE
 
 Tasks:
 
-1. Add `backend/scripts/infer_cli.py` for single video inference.
-2. Add batch mode for directory input.
-3. Extract core inference logic into `backend/app/services/inference.py`.
-4. Run full pipeline: video chunking -> local transcription -> multimodal model -> report JSON.
+1. ~~Add `backend/scripts/infer_cli.py` for single video inference.~~
+2. ~~Add batch mode for directory input.~~
+3. ~~Extract core inference logic into `backend/app/services/inference.py`.~~
+4. ~~Run full pipeline: video chunking -> local transcription -> multimodal model -> report JSON.~~
 
 Definition of done:
 
-1. CLI produces full report JSON for unseen videos.
-2. CLI is the primary way ML engineers run inference and batch scoring.
-3. No FastAPI needed for ML development.
+1. ~~CLI produces full report JSON for unseen videos.~~
+2. ~~CLI is the primary way ML engineers run inference and batch scoring.~~
+3. ~~No FastAPI needed for ML development.~~
 
 ## Phase 6b: FastAPI Frontend Integration (optional, after Phase 6 stable)
 

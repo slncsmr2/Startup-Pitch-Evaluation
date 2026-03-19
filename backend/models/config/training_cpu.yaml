@@ -1,0 +1,10 @@
+# Phase-5 CPU training defaults
+device: cpu
+epochs: 8
+learning_rate: 0.03
+train_samples: 120
+val_samples: 48
+test_samples: 48
+seed: 7
+checkpoint_dir: models/checkpoints
+checkpoint_name: training_cpu_checkpoint.json
