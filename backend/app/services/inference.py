@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 from pathlib import Path
-from uuid import uuid4
 
 from app.core.config import settings
 from app.pipeline import StartupPitchPipeline
@@ -23,8 +23,14 @@ class InferenceService:
             window_seconds=window_seconds or settings.chunk_window_seconds
         )
 
+    @staticmethod
+    def _build_request_id(payload: PitchInput) -> str:
+        serialized = payload.model_dump_json()
+        digest = hashlib.sha1(serialized.encode("utf-8")).hexdigest()[:16]
+        return f"req-{digest}"
+
     def evaluate_payload(self, payload: PitchInput, request_id: str | None = None) -> EvaluationResponse:
-        inference_id = request_id or str(uuid4())
+        inference_id = request_id or self._build_request_id(payload)
         return self.pipeline.evaluate(payload, request_id=inference_id)
 
     def evaluate_batch(self, pitches: list[PitchInput]) -> BatchEvaluationResponse:

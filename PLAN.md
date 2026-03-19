@@ -153,40 +153,40 @@ Definition of done:
 2. ~~CLI is the primary way ML engineers run inference and batch scoring.~~
 3. ~~No FastAPI needed for ML development.~~
 
-## Phase 6b: FastAPI Frontend Integration (optional, after Phase 6 stable)
+## ~~Phase 6b: FastAPI Frontend Integration (optional, after Phase 6 stable)~~ ✓ COMPLETE
 
 Tasks:
 
-1. Keep `backend/app/main.py` as thin wrapper.
-2. POST /evaluate endpoint calls same `backend/app/services/inference.py` as CLI.
-3. Verify FastAPI output matches CLI output for identical inputs.
-4. This layer is optional for frontend UI integration only.
+1. ~~Keep `backend/app/main.py` as thin wrapper.~~
+2. ~~POST /evaluate endpoint calls same `backend/app/services/inference.py` as CLI.~~
+3. ~~Verify FastAPI output matches CLI output for identical inputs.~~
+4. ~~This layer is optional for frontend UI integration only.~~
 
 Definition of done:
 
-1. FastAPI endpoint returns identical JSON to CLI.
-2. Frontend can upload video and receive scoring report.
-3. FastAPI can be omitted entirely if not needed.
+1. ~~FastAPI endpoint returns identical JSON to CLI.~~
+2. ~~Frontend can upload video and receive scoring report.~~
+3. ~~FastAPI can be omitted entirely if not needed.~~
 
-## Phase 7: Quality and hardening
+## ~~Phase 7: Quality and hardening~~ ✓ COMPLETE
 
 Tasks:
 
-1. Expand tests:
+1. ~~Expand tests:~~
    - unit tests for processors/transcriber/model wrappers
    - integration tests for end-to-end video -> score
-2. Add edge-case tests:
+2. ~~Add edge-case tests:~~
    - silent audio
    - short video
    - corrupt file
    - mixed English-Tamil speech
-3. Add benchmark script for CPU and GPU runtime.
+3. ~~Add benchmark script for CPU and GPU runtime.~~
 
 Definition of done:
 
-1. Test suite passes.
-2. Failures are handled gracefully with clear error messages.
-3. Latency baseline is documented.
+1. ~~Test suite passes.~~
+2. ~~Failures are handled gracefully with clear error messages.~~
+3. ~~Latency baseline is documented.~~
 
 ## Agent assignments (sequential)
 

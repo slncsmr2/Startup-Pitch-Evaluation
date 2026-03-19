@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas import PitchInput
+from app.services.inference import InferenceService
 
 
 def _sample_payload(title: str) -> dict:
@@ -64,3 +66,17 @@ def test_batch_evaluation_requires_non_empty_pitches() -> None:
     client = TestClient(app)
     response = client.post("/evaluate/batch", json={"pitches": []})
     assert response.status_code == 400
+
+
+def test_evaluate_endpoint_matches_shared_inference_output() -> None:
+    payload_dict = _sample_payload("ParityCheck")
+
+    client = TestClient(app)
+    api_response = client.post("/evaluate", json=payload_dict)
+    assert api_response.status_code == 200
+    api_body = api_response.json()
+
+    service = InferenceService()
+    expected = service.evaluate_payload(PitchInput.model_validate(payload_dict)).model_dump()
+
+    assert api_body == expected
