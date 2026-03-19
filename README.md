@@ -23,6 +23,7 @@ Multimodal AI backend for evaluating startup pitch quality using text, visual, a
   - Visual: Frame analysis, delivery and confidence signals, visual embeddings
   - Audio: Prosody analysis, voice pace and energy signals, audio embeddings
 - **Fusion & Scoring**: Cross-modal weighted fusion with 10 scoring metrics (0-10 scale)
+- **Output**: Aggregate score, investment band, risk flags, and automated feedback
 - **Explainability**: Per-chunk visualizations with modality attention weights and risk distribution
 
 ## Project structure
