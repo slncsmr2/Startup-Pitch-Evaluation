@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Startup Pitch Evaluation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <div class="ambient ambient-three"></div>
+
+    <header class="topbar">
+      <div class="title-wrap">
+        <p class="eyebrow">Investor Lens</p>
+        <h1>Startup Pitch Evaluation Studio</h1>
+        <p class="subhead">
+          Craft your pitch on the left and inspect investor-ready signals on the
+          right.
+        </p>
+      </div>
+      <div class="topbar-actions">
+        <button id="loadSampleBtn" class="ghost-btn" type="button">
+          Load Sample
+        </button>
+        <button id="clearBtn" class="ghost-btn ghost-alt" type="button">
+          Clear
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2>Pitch Input</h2>
+          <p>Compose the startup pitch content and evaluate instantly.</p>
+        </div>
+
+        <!-- Video Player Section -->
+        <div class="video-section">
+          <div class="video-header">
+            <label for="videoSelect">Load Video</label>
+            <select id="videoSelect" class="video-select">
+              <option value="">Select a video...</option>
+            </select>
+          </div>
+          <div id="videoContainer" class="video-container hidden">
+            <video
+              id="pitchVideo"
+              class="pitch-video"
+              controls
+              controlsList="nodownload"
+            >
+              Your browser does not support the video tag.
+            </video>
+            <div class="video-info">
+              <p id="videoTitle" class="video-title"></p>
+              <p id="videoDuration" class="video-duration"></p>
+            </div>
+          </div>
+        </div>
+
+        <form id="pitchForm" class="pitch-form">
+          <label>
+            Title
+            <input
+              id="title"
+              name="title"
+              required
+              placeholder="Ex: RetailPulse"
+            />
+          </label>
+
+          <label>
+            Transcript
+            <textarea
+              id="transcript"
+              name="transcript"
+              rows="5"
+              placeholder="Paste full transcript..."
+            ></textarea>
+          </label>
+
+          <label>
+            Video Transcript
+            <textarea
+              id="videoTranscript"
+              name="videoTranscript"
+              rows="4"
+              placeholder="Transcript extracted from video/audio..."
+            ></textarea>
+          </label>
+
+          <label>
+            Slide Points (one per line)
+            <textarea
+              id="slideText"
+              name="slideText"
+              rows="4"
+              placeholder="Problem&#10;Solution&#10;Traction"
+            ></textarea>
+          </label>
+
+          <div class="grid-two">
+            <label>
+              Founder Name
+              <input
+                id="founderName"
+                name="founderName"
+                placeholder="Founder Name"
+              />
+            </label>
+            <label>
+              Startup Name
+              <input
+                id="startupName"
+                name="startupName"
+                placeholder="Startup Name"
+              />
+            </label>
+            <label>
+              Sector
+              <input id="sector" name="sector" placeholder="FinTech" />
+            </label>
+            <label>
+              Stage
+              <input id="stage" name="stage" placeholder="Seed" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="evaluateBtn" class="primary-btn" type="submit">
+              Evaluate Pitch
+            </button>
+            <span id="statusText" class="status-text" aria-live="polite"></span>
+          </div>
+        </form>
+
+        <article class="pitch-preview" id="pitchPreview">
+          <h3>Pitch Snapshot</h3>
+          <p>Fill the form to preview your startup pitch summary.</p>
+        </article>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-header">
+          <h2>Evaluation Output</h2>
+          <p>
+            Read the core score, metrics, modality weights, and chunk-level
+            insights.
+          </p>
+        </div>
+
+        <!-- Video Completion Rating Panel -->
+        <div id="videoRatingPanel" class="video-rating-panel hidden">
+          <div class="rating-header">
+            <h3>Video Complete!</h3>
+            <p class="rating-subtitle">Startup Rating Available</p>
+          </div>
+          <div class="rating-content">
+            <div class="rating-badge" id="ratingBadge">
+              <span class="rating-score" id="finalScore">--</span>
+              <span class="rating-label">/10</span>
+            </div>
+            <div class="rating-details">
+              <p><strong id="videoRatingBand">--</strong></p>
+              <p id="videoRatingText" class="rating-text">
+                Evaluation results ready
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <article id="evaluationPlaceholder" class="placeholder">
+          Submit a pitch to render evaluation insights.
+        </article>
+
+        <article id="evaluationResults" class="evaluation-results hidden">
+          <section class="summary-card" id="summaryCard"></section>
+
+          <section class="kpi-grid">
+            <article class="kpi-card">
+              <p class="kpi-label">Overall Score</p>
+              <p id="overallKpi" class="kpi-value">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Confidence</p>
+              <p id="confidenceKpi" class="kpi-value">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Investment Band</p>
+              <p id="bandKpi" class="kpi-value kpi-band">-</p>
+            </article>
+          </section>
+
+          <section class="result-grid">
+            <div>
+              <h3>Quantitative Scores</h3>
+              <div id="quantScores" class="chart-card"></div>
+            </div>
+            <div>
+              <h3>Modality Weights</h3>
+              <div id="modalityWeights" class="chart-card"></div>
+            </div>
+          </section>
+
+          <section class="result-grid result-grid-lower">
+            <div>
+              <h3>Risk Distribution</h3>
+              <div id="riskDistribution" class="list-card"></div>
+            </div>
+            <div>
+              <h3>Guidance</h3>
+              <div id="guidanceList" class="list-card"></div>
+            </div>
+          </section>
+
+          <section>
+            <h3>Chunk Insights</h3>
+            <div id="chunkReports" class="chunks"></div>
+          </section>
+
+          <section class="raw-json-wrap">
+            <details>
+              <summary>Raw API JSON</summary>
+              <pre id="rawJson" class="raw-json"></pre>
+            </details>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

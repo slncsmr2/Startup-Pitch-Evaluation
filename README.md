@@ -1,64 +1,71 @@
 # Startup-Pitch-Evaluation
 
-Multimodal AI backend starter project for evaluating startup pitch quality using text, visual, and audio feature pipelines.
-
-This repository now includes a notebook-first project export under `notebooks/startup_pitch_evaluation_all.ipynb`, which merges the entire project into a single `.ipynb` file.
+Multimodal AI backend for evaluating startup pitch quality using text, visual, and audio feature pipelines.
 
 ## What this project includes
 
-- FastAPI service with evaluation endpoint
-- Batch evaluation endpoint for multiple pitches
-- Modular pipeline matching your architecture:
-- Input preprocessing and temporal chunk synchronization (5s windows)
-- Parallel feature extraction for text (NLP), visual (CV), and audio (DSP) signals
-- Fusion and hierarchical scoring heads (10 quantitative metrics)
-- Explainability outputs with modality attention weights per chunk
-- Heuristic risk flag detection per chunk
-- Automated strengths, weaknesses, suggestions, and dashboard-ready series output
-- Unit test for end-to-end pipeline execution
+- FastAPI service with evaluation and batch evaluation endpoints
+- Modular pipeline with parallel feature extraction across modalities:
+  - Text processing (NLP) with language detection
+  - Visual analysis (CV) for delivery and confidence signals
+  - Audio processing (DSP) for prosody and pace analysis
+- Cross-modal fusion with attention weight tracking
+- Hierarchical scoring with 10 quantitative metrics
+- Risk flag detection and automated insights
+- CLI and REST API with identical inference logic
+- Jupyter notebook integration for interactive analysis
 
-## Architecture coverage (diagram to code)
+## Architecture
 
-- Input and preprocessing:
-- Video, slides, and user details accepted through request schema
-- Temporal synchronizer and segmenter in 5-second chunks
-- Feature extraction (parallel):
-- Text path: speech text input, EN/TA language detection, bilingual normalization, text embeddings
-- Visual path: frame-level proxy extraction, delivery and confidence signals, visual embeddings
-- Audio path: waveform/prosody proxy extraction, voice pace and prosody signals, audio embeddings
-- Advanced fusion and scoring:
-- Cross-modal weighted fusion (text/visual/audio attention weights)
-- 10 scoring heads: 6 text-focused + 4 AV-focused metrics, each 0-10
-- Output and reporting:
-- Weighted aggregate score, investment band, risk flags, and automated feedback
-- Investor dashboard payload for charts (metric series, modality weights, risk distribution)
+- **Input & Preprocessing**: Video, slides, and user details accepted; temporal synchronization in 5-second chunks
+- **Feature Extraction** (parallel):
+  - Text: Speech transcription, language detection, text embeddings
+  - Visual: Frame analysis, delivery and confidence signals, visual embeddings
+  - Audio: Prosody analysis, voice pace and energy signals, audio embeddings
+- **Fusion & Scoring**: Cross-modal weighted fusion with 10 scoring metrics (0-10 scale)
+- **Explainability**: Per-chunk visualizations with modality attention weights and risk distribution
 
 ## Project structure
 
 ```text
 backend/
-	app/
-		core/config.py
-		main.py
-		pipeline.py
-		schemas.py
-		services/
-			preprocessing.py
-			extractors.py
-			fusion.py
-			scoring.py
-			reporting.py
-	tests/test_pipeline.py
-	requirements.txt
+  app/
+    core/config.py
+    main.py
+    pipeline.py
+    schemas.py
+    services/
+      preprocessing.py
+      extractors.py
+      fusion.py
+      scoring.py
+      reporting.py
+      audio_processor.py
+      video_processor.py
+      transcriber.py
+  models/
+    text_encoder.py
+    visual_encoder.py
+    audio_encoder.py
+    fusion_head.py
+    scoring_head.py
+  tests/
+    test_api.py
+    test_pipeline.py
+    test_transcriber.py
+  scripts/
+    infer_cli.py
+    train.py
+    evaluate.py
+  requirements.txt
+
 notebooks/
-	startup_pitch_evaluation_all.ipynb
+  Startup_Pitch_Evaluation.ipynb
 ```
 
 ## Quick start
 
-1. Create and activate a Python virtual environment.
-2. Install dependencies.
-3. Run the API.
+### Running the API
 
 ```powershell
 cd backend
@@ -68,9 +75,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-## Notebook-first quick start
+The API will be available at:
 
-Use this path if you want to operate the project as an `.ipynb` workflow.
+- `http://127.0.0.1:8000/health` - Health check
+- `http://127.0.0.1:8000/docs` - Interactive API documentation
+
+### Running with Jupyter notebooks
 
 ```powershell
 cd backend
@@ -82,15 +92,7 @@ cd ..
 jupyter lab
 ```
 
-Then open `notebooks/startup_pitch_evaluation_all.ipynb`.
-
-- The notebook contains all project text/code files as sections.
-- Each section starts with a file path heading and then the source content cell.
-
-API will be available at:
-
-- `http://127.0.0.1:8000/health`
-- `http://127.0.0.1:8000/docs`
+Then open `notebooks/Startup_Pitch_Evaluation.ipynb`.
 
 ## Sample evaluation request
 
