@@ -2,6 +2,8 @@
 
 Multimodal AI backend starter project for evaluating startup pitch quality using text, visual, and audio feature pipelines.
 
+This repository now includes a notebook-first project export under `notebooks/startup_pitch_evaluation_all.ipynb`, which merges the entire project into a single `.ipynb` file.
+
 ## What this project includes
 
 - FastAPI service with evaluation endpoint
@@ -48,6 +50,8 @@ backend/
 			reporting.py
 	tests/test_pipeline.py
 	requirements.txt
+notebooks/
+	startup_pitch_evaluation_all.ipynb
 ```
 
 ## Quick start
@@ -63,6 +67,25 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+
+## Notebook-first quick start
+
+Use this path if you want to operate the project as an `.ipynb` workflow.
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m ipykernel install --user --name startup-pitch-eval --display-name "Python (startup-pitch-eval)"
+cd ..
+jupyter lab
+```
+
+Then open `notebooks/startup_pitch_evaluation_all.ipynb`.
+
+- The notebook contains all project text/code files as sections.
+- Each section starts with a file path heading and then the source content cell.
 
 API will be available at:
 
