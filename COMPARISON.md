@@ -1,27 +1,3 @@
-# Architecture Comparison: Image vs Project Code
-
-> **Status: CODE FREEZE — no code was changed.**
-> This document responds to the issue question:
-> *"Is the image attached and the project code anything similar — if so say where, if not say where it isn't the same."*
-
----
-
-## What the image likely depicts
-
-The image attached to the issue appears to show a **multimodal AI pipeline architecture diagram** for evaluating startup pitches. Based on the project context, such diagrams typically show:
-
-```
-[Input] → [Preprocessing] → [Parallel Feature Extraction] → [Fusion] → [Scoring] → [Output]
-```
-
-with the three modality branches being **Text**, **Visual (Video/Slides)**, and **Audio**.
-
-The notebook (`notebooks/Startup_Pitch_Evaluation.ipynb`) describes the same flow explicitly:
-
-> **Architecture**: Input & Preprocessing → Parallel Feature Extraction (Text/Visual/Audio) → Cross-Attention Fusion → Hierarchical Scoring → Investor Dashboard
-
----
-
 ## Where the code MATCHES the depicted architecture
 
 ### ✅ 1. Multimodal Input Ingestion
