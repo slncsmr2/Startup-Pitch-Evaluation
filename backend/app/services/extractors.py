@@ -15,13 +15,13 @@ class VisualFeatureExtractor:
     def __init__(self) -> None:
         self.model = VisualEncoder(embedding_dim=24)
 
-    def extract(self, slide_context: str, chunk_id: int, user_stage: str) -> dict:
-        return self.model.infer(slide_context, chunk_id, user_stage)
+    def extract(self, slide_context: str, chunk_id: int, user_stage: str, video_metadata: object | None = None) -> dict:
+        return self.model.infer(slide_context, chunk_id, user_stage, video_metadata=video_metadata)
 
 
 class AudioFeatureExtractor:
     def __init__(self) -> None:
         self.model = AudioEncoder(embedding_dim=24)
 
-    def extract(self, chunk_text: str) -> dict:
-        return self.model.infer(chunk_text)
+    def extract(self, chunk_text: str, audio_metadata: object | None = None) -> dict:
+        return self.model.infer(chunk_text, audio_metadata=audio_metadata)

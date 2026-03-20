@@ -49,8 +49,16 @@ class StartupPitchPipeline:
 
         for chunk in chunks:
             text_features = self.text_extractor.extract(chunk.text, payload.language_hint, chunk.slide_context)
-            visual_features = self.visual_extractor.extract(chunk.slide_context, chunk.chunk_id, user_stage)
-            audio_features = self.audio_extractor.extract(chunk.text)
+            visual_features = self.visual_extractor.extract(
+                chunk.slide_context,
+                chunk.chunk_id,
+                user_stage,
+                video_metadata=chunk.alignment.video_metadata,
+            )
+            audio_features = self.audio_extractor.extract(
+                chunk.text,
+                audio_metadata=chunk.alignment.audio_metadata,
+            )
             language_predictions.append(text_features["language_detected"])
 
             fused = fuse_modalities(text_features, visual_features, audio_features)

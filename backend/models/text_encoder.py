@@ -16,17 +16,84 @@ class TextEncoder:
         repeats = (self.embedding_dim // len(values)) + 1
         return (values * repeats)[: self.embedding_dim]
 
-    def _detect_language(self, chunk_text: str, language_hint: str) -> str:
-        tamil_chars = len(re.findall(r"[\u0B80-\u0BFF]", chunk_text))
-        english_chars = len(re.findall(r"[A-Za-z]", chunk_text))
-        hint = language_hint.lower()
+    @staticmethod
+    def _latin_tokens(text: str) -> list[str]:
+        return re.findall(r"[A-Za-z']+", text.lower())
 
-        if tamil_chars > 0 and english_chars > 0:
-            return "ta-en"
-        if tamil_chars > 0:
+    def _english_evidence(self, text: str) -> float:
+        tokens = self._latin_tokens(text)
+        if not tokens:
+            return 0.0
+
+        common_en = {
+            "the", "a", "an", "and", "or", "for", "to", "of", "in", "on", "with", "by", "from",
+            "is", "are", "was", "were", "be", "been", "being", "we", "our", "you", "your", "they",
+            "this", "that", "these", "those", "it", "as", "at", "will", "can", "have", "has", "had",
+            "startup", "market", "problem", "solution", "revenue", "growth", "pilot", "team", "product",
+        }
+        hits = sum(1 for t in tokens if t in common_en)
+        lexical_ratio = hits / max(1, len(tokens))
+
+        vowels = sum(1 for ch in "".join(tokens) if ch in "aeiou")
+        vowel_ratio = vowels / max(1, len("".join(tokens)))
+
+        # Weighted lexical+orthographic signal for English-like Latin text.
+        return min(1.0, (lexical_ratio * 0.8) + (vowel_ratio * 0.7))
+
+    def _detect_language(self, chunk_text: str, language_hint: str) -> str:
+        text = chunk_text.strip()
+        hint = language_hint.lower().strip()
+
+        if not text:
+            return "en"
+
+        tamil_chars = len(re.findall(r"[\u0B80-\u0BFF]", text))
+        english_chars = len(re.findall(r"[A-Za-z]", text))
+        letter_total = tamil_chars + english_chars
+        tamil_ratio = (tamil_chars / letter_total) if letter_total else 0.0
+        english_ratio = (english_chars / letter_total) if letter_total else 0.0
+        english_evidence = self._english_evidence(text)
+
+        # Strong script signal wins first.
+        if english_chars > 0 and (english_ratio >= 0.8 or (tamil_chars == 0 and english_evidence >= 0.18)):
+            return "en"
+        if tamil_chars > 0 and tamil_ratio >= 0.8:
             return "ta"
-        if "ta" in hint and "en" in hint:
+
+        # Mixed script when both are materially present.
+        if tamil_chars > 0 and english_chars > 0 and tamil_ratio >= 0.12 and english_ratio >= 0.12:
             return "ta-en"
+        if tamil_chars > 0 and english_chars == 0:
+            return "ta"
+        if english_chars > 0 and tamil_chars == 0:
+            return "en"
+
+        # Try probabilistic language detection for Latin-script or sparse text.
+        try:
+            from langdetect import detect_langs  # type: ignore
+
+            predictions = detect_langs(text)
+            probs = {item.lang: item.prob for item in predictions}
+            ta_prob = probs.get("ta", 0.0)
+            en_prob = probs.get("en", 0.0)
+
+            if ta_prob >= 0.22 and en_prob >= 0.22:
+                return "ta-en"
+            if en_prob >= 0.45 and english_evidence >= 0.15:
+                return "en"
+            if ta_prob >= 0.6:
+                return "ta"
+            if en_prob >= 0.55:
+                return "en"
+        except Exception:
+            pass
+
+        if english_evidence >= 0.18:
+            return "en"
+
+        # Conservative fallback for genuinely ambiguous short text.
+        if "ta" in hint:
+            return "ta"
         return "en"
 
     def _normalize(self, chunk_text: str) -> str:

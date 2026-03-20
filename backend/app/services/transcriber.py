@@ -1,7 +1,6 @@
-"""Local transcription abstraction with deterministic fallback behavior.
+"""Transcription abstraction with deterministic fallback behavior.
 
-This module intentionally avoids any network behavior. Backends only run when
-the required package and local model artifacts are available.
+Only OpenAI Whisper API is supported.
 """
 
 from __future__ import annotations
@@ -89,106 +88,66 @@ class BaseLocalTranscriber(ABC):
         )
 
 
-class WhisperLocalTranscriber(BaseLocalTranscriber):
+class OpenAIWhisperAPITranscriber(BaseLocalTranscriber):
     def __init__(
         self,
-        model_path: str,
+        api_key: str,
+        model_name: str = "whisper-1",
         min_audio_quality: float = 0.35,
     ):
-        super().__init__(backend_name="whisper", min_audio_quality=min_audio_quality)
-        self.model_path = model_path
-        self._model = None
+        super().__init__(backend_name="openai-whisper-api", min_audio_quality=min_audio_quality)
+        self.api_key = api_key.strip()
+        self.model_name = model_name.strip() or "whisper-1"
+        self._client = None
 
-    def _load_model(self):
-        if self._model is not None:
-            return self._model
-        if not self.model_path or not Path(self.model_path).exists():
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+        if not self.api_key:
             return None
         try:
-            import whisper  # type: ignore
+            from openai import OpenAI  # type: ignore
 
-            self._model = whisper.load_model(self.model_path)
-            return self._model
+            self._client = OpenAI(api_key=self.api_key)
+            return self._client
         except Exception as exc:
-            logger.warning("Whisper backend unavailable: %s", exc)
+            logger.warning("OpenAI transcriber backend unavailable: %s", exc)
             return None
 
     def transcribe_audio_file(self, audio_file_path: str, language_hint: str = "") -> TranscriptionResult:
-        model = self._load_model()
-        if model is None:
+        client = self._get_client()
+        if client is None:
             return self._fallback(
                 fallback_text="",
                 confidence=0.0,
                 status="backend-unavailable",
-                reason="whisper model/package not available locally",
+                reason="openai client or API key not available",
             )
+
+        audio_path = Path(audio_file_path)
+        if not audio_path.exists() or not audio_path.is_file():
+            return self._fallback(
+                fallback_text="",
+                confidence=0.0,
+                status="backend-unavailable",
+                reason=f"audio_file_missing={audio_file_path}",
+            )
+
         try:
-            kwargs = {}
             normalized_hint = language_hint.strip().lower()
+            request_kwargs: dict = {
+                "model": self.model_name,
+            }
             if normalized_hint in {"en", "ta"}:
-                kwargs["language"] = normalized_hint
-            output = model.transcribe(audio_file_path, **kwargs)
-            text = (output.get("text") or "").strip()
-            confidence = 0.8 if text else 0.0
+                request_kwargs["language"] = normalized_hint
+
+            with audio_path.open("rb") as audio_file:
+                output = client.audio.transcriptions.create(file=audio_file, **request_kwargs)
+
+            text = (getattr(output, "text", "") or "").strip()
             return TranscriptionResult(
                 text=text,
-                confidence=confidence,
-                backend=self.backend_name,
-                status="ok" if text else "empty",
-                reason="",
-            )
-        except Exception as exc:
-            return TranscriptionResult(
-                text="",
-                confidence=0.0,
-                backend=self.backend_name,
-                status="error",
-                reason=str(exc),
-            )
-
-
-class FasterWhisperLocalTranscriber(BaseLocalTranscriber):
-    def __init__(
-        self,
-        model_path: str,
-        min_audio_quality: float = 0.35,
-    ):
-        super().__init__(backend_name="faster-whisper", min_audio_quality=min_audio_quality)
-        self.model_path = model_path
-        self._model = None
-
-    def _load_model(self):
-        if self._model is not None:
-            return self._model
-        if not self.model_path or not Path(self.model_path).exists():
-            return None
-        try:
-            from faster_whisper import WhisperModel  # type: ignore
-
-            self._model = WhisperModel(self.model_path, device="cpu", compute_type="int8")
-            return self._model
-        except Exception as exc:
-            logger.warning("faster-whisper backend unavailable: %s", exc)
-            return None
-
-    def transcribe_audio_file(self, audio_file_path: str, language_hint: str = "") -> TranscriptionResult:
-        model = self._load_model()
-        if model is None:
-            return self._fallback(
-                fallback_text="",
-                confidence=0.0,
-                status="backend-unavailable",
-                reason="faster-whisper model/package not available locally",
-            )
-        try:
-            normalized_hint = language_hint.strip().lower()
-            language = normalized_hint if normalized_hint in {"en", "ta"} else None
-            segments, info = model.transcribe(audio_file_path, language=language)
-            text = " ".join(segment.text.strip() for segment in segments if segment.text).strip()
-            confidence = float(getattr(info, "language_probability", 0.8)) if text else 0.0
-            return TranscriptionResult(
-                text=text,
-                confidence=round(max(0.0, min(1.0, confidence)), 2),
+                confidence=0.85 if text else 0.0,
                 backend=self.backend_name,
                 status="ok" if text else "empty",
                 reason="",
@@ -204,14 +163,12 @@ class FasterWhisperLocalTranscriber(BaseLocalTranscriber):
 
 
 def build_local_transcriber(
-    backend: str,
-    model_path: str,
     min_audio_quality: float = 0.35,
+    openai_api_key: str = "",
+    openai_model_name: str = "whisper-1",
 ) -> BaseLocalTranscriber:
-    normalized = backend.strip().lower()
-    if normalized in {"faster-whisper", "faster_whisper", "faster"}:
-        return FasterWhisperLocalTranscriber(model_path=model_path, min_audio_quality=min_audio_quality)
-    if normalized == "whisper":
-        return WhisperLocalTranscriber(model_path=model_path, min_audio_quality=min_audio_quality)
-    logger.warning("Unknown transcriber backend '%s'; defaulting to faster-whisper", backend)
-    return FasterWhisperLocalTranscriber(model_path=model_path, min_audio_quality=min_audio_quality)
+    return OpenAIWhisperAPITranscriber(
+        api_key=openai_api_key,
+        model_name=openai_model_name,
+        min_audio_quality=min_audio_quality,
+    )

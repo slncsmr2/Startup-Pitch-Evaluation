@@ -7,9 +7,9 @@ from app.services.transcriber import build_local_transcriber
 
 def test_transcriber_falls_back_when_audio_file_missing() -> None:
     transcriber = build_local_transcriber(
-        backend="faster-whisper",
-        model_path="",
         min_audio_quality=0.35,
+        openai_api_key="",
+        openai_model_name="whisper-1",
     )
     metadata = AudioChunkMetadata(
         chunk_id=0,
@@ -42,13 +42,11 @@ def test_transcriber_falls_back_when_audio_file_missing() -> None:
 
 def test_preprocessing_uses_local_transcriber_with_fallback() -> None:
     previous_flag = settings.use_local_transcriber
-    previous_backend = settings.local_transcriber_backend
-    previous_model_path = settings.local_transcriber_model_path
+    previous_api_key = settings.openai_api_key
 
     try:
         settings.use_local_transcriber = True
-        settings.local_transcriber_backend = "faster-whisper"
-        settings.local_transcriber_model_path = ""
+        settings.openai_api_key = ""
 
         payload = PitchInput(
             title="FallbackTest",
@@ -68,5 +66,40 @@ def test_preprocessing_uses_local_transcriber_with_fallback() -> None:
         assert chunks[0].alignment.text_excerpt == chunks[0].text
     finally:
         settings.use_local_transcriber = previous_flag
-        settings.local_transcriber_backend = previous_backend
-        settings.local_transcriber_model_path = previous_model_path
+        settings.openai_api_key = previous_api_key
+
+
+def test_openai_transcriber_backend_selection_and_fallback() -> None:
+    transcriber = build_local_transcriber(
+        min_audio_quality=0.35,
+        openai_api_key="",
+        openai_model_name="whisper-1",
+    )
+
+    metadata = AudioChunkMetadata(
+        chunk_id=0,
+        start_sec=0,
+        end_sec=5,
+        duration_sec=5.0,
+        sample_rate=16000,
+        num_samples=80000,
+        mel_shape=(64, 156),
+        mel_mean=0.0,
+        mel_std=0.0,
+        silence_ratio=0.0,
+        clipping_ratio=0.0,
+        audio_quality_score=0.1,
+        audio_hash="abc123",
+        audio_file_path="audio/missing/chunk_0000.wav",
+    )
+
+    result = transcriber.transcribe_chunk(
+        audio_file_path=metadata.audio_file_path,
+        audio_metadata=metadata,
+        fallback_text="fallback transcript",
+        language_hint="en",
+    )
+
+    assert transcriber.backend_name == "openai-whisper-api"
+    assert result.text == "fallback transcript"
+    assert result.status == "fallback-low-quality"

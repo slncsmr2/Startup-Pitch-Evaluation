@@ -19,13 +19,45 @@ class VisualEncoder:
     def _clamp_10(value: float) -> float:
         return max(0.0, min(10.0, value))
 
-    def infer(self, slide_context: str, chunk_id: int, user_stage: str) -> dict:
+    def infer(self, slide_context: str, chunk_id: int, user_stage: str, video_metadata: object | None = None) -> dict:
         text = slide_context if slide_context else "no-slides"
         density = min(len(text.split()), 120) / 120.0
         stage_bonus = 0.8 if user_stage.lower() in {"seed", "series-a", "series a"} else 0.3
 
+        frame_count = float(getattr(video_metadata, "frame_count", 5))
+        start_sec = float(getattr(video_metadata, "start_sec", chunk_id * 5))
+        end_sec = float(getattr(video_metadata, "end_sec", (chunk_id + 1) * 5))
+        extraction_status = str(getattr(video_metadata, "extraction_status", "skipped"))
+        face_ratio = float(getattr(video_metadata, "face_ratio", 0.0))
+        motion_score = float(getattr(video_metadata, "motion_score", 0.0))
+        eye_contact_score = float(getattr(video_metadata, "eye_contact_score", 0.0))
+        pose_ratio = float(getattr(video_metadata, "pose_ratio", 0.0))
+        gesture_energy = float(getattr(video_metadata, "gesture_energy", 0.0))
+        duration = max(1.0, end_sec - start_sec)
+        frame_coverage = min(2.0, frame_count / duration)
+        extraction_bonus = 0.8 if extraction_status == "success" else (0.35 if extraction_status == "pending" else 0.0)
+
         return {
-            "embedding": self._hash_to_vector(f"visual::{chunk_id}::{text}::{user_stage}"),
-            "delivery_clarity": self._clamp_10(4.2 + density * 3.8),
-            "presenter_confidence": self._clamp_10(4.0 + (chunk_id % 5) * 0.9 + stage_bonus),
+            "embedding": self._hash_to_vector(
+                f"visual::{chunk_id}::{text}::{user_stage}::frames={frame_count}::face={face_ratio:.3f}::eye={eye_contact_score:.3f}::pose={pose_ratio:.3f}::gesture={gesture_energy:.3f}::motion={motion_score:.3f}::status={extraction_status}"
+            ),
+            "delivery_clarity": self._clamp_10(
+                3.8
+                + density * 2.8
+                + frame_coverage * 0.9
+                + motion_score * 0.6
+                + pose_ratio * 1.2
+                + gesture_energy * 0.7
+                + extraction_bonus
+            ),
+            "presenter_confidence": self._clamp_10(
+                4.0
+                + density * 1.6
+                + stage_bonus
+                + extraction_bonus
+                + face_ratio * 1.0
+                + eye_contact_score * 1.5
+                + pose_ratio * 1.0
+                + gesture_energy * 0.8
+            ),
         }

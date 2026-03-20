@@ -166,6 +166,27 @@ pytest -q
 - Current feature extraction and fusion are deterministic placeholder implementations designed for fast iteration.
 - You can replace individual service modules with real model inference (Whisper, wav2vec2, ViT, multimodal transformers) without changing API contracts.
 
+## Optional OpenAI Whisper API transcription
+
+The backend can transcribe a full local video file via OpenAI Whisper API and then align text across 5-second chunks.
+
+Set these environment variables in `backend/.env`:
+
+```text
+SPE_USE_LOCAL_TRANSCRIBER=true
+SPE_OPENAI_API_KEY=<your_openai_api_key>
+SPE_OPENAI_TRANSCRIBER_MODEL=whisper-1
+SPE_MEDIA_LOOKUP_DIR=outputs/batch_input
+SPE_ENABLE_VISUAL_EXTRACTION=true
+SPE_ENABLE_AUDIO_EXTRACTION=true
+```
+
+`SPE_MEDIA_LOOKUP_DIR` is resolved relative to `backend/` unless absolute.
+`SPE_ENABLE_VISUAL_EXTRACTION` and `SPE_ENABLE_AUDIO_EXTRACTION` control local CV/DSP chunk extraction.
+
+For local CV/DSP extraction, install ffmpeg on your machine and ensure it is available on PATH.
+When installed, MediaPipe is also used for additional face/pose/gesture cues.
+
 ## Run tests
 
 ```powershell

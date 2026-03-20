@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.core.config import settings
 from app.schemas import PitchInput
@@ -46,6 +47,30 @@ def _resolve_slide_context(payload: PitchInput) -> str:
     return " ".join(payload.slide_text).strip()
 
 
+def _resolve_video_file_path(video_file_name: str) -> str:
+    if not video_file_name:
+        return video_file_name
+
+    raw_path = Path(video_file_name)
+    if raw_path.is_file():
+        return str(raw_path)
+
+    backend_root = Path(__file__).resolve().parents[2]
+    configured_lookup = Path(settings.media_lookup_dir)
+    if configured_lookup.is_absolute():
+        candidate_dirs = [configured_lookup]
+    else:
+        candidate_dirs = [backend_root / configured_lookup]
+
+    candidate_dirs.append(Path.cwd())
+    for base_dir in candidate_dirs:
+        candidate = base_dir / video_file_name
+        if candidate.is_file():
+            return str(candidate)
+
+    return video_file_name
+
+
 def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 5) -> list[PitchChunk]:
     """
     Synchronizes transcript/video/slide context using true timeline chunking.
@@ -66,23 +91,44 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
     # Get video duration (true timeline source of truth)
     video_duration_sec = payload.video.duration_sec if payload.video else 60
     video_file = payload.video.file_name if payload.video else "unknown.mp4"
-    logger.info(f"Temporal segmentation | video={video_file} | duration_sec={video_duration_sec}")
+    video_file_path = _resolve_video_file_path(video_file)
+    logger.info(
+        "Temporal segmentation | video=%s | resolved_path=%s | duration_sec=%s",
+        video_file,
+        video_file_path,
+        video_duration_sec,
+    )
     
     # Initialize processors for audio/video chunk metadata
-    video_processor = VideoProcessor(frame_extraction_enabled=False)
-    audio_processor = AudioProcessor(audio_extraction_enabled=False)
+    video_processor = VideoProcessor(frame_extraction_enabled=settings.enable_visual_extraction)
+    audio_processor = AudioProcessor(audio_extraction_enabled=settings.enable_audio_extraction)
     transcriber: BaseLocalTranscriber | None = None
     if settings.use_local_transcriber:
         transcriber = build_local_transcriber(
-            backend=settings.local_transcriber_backend,
-            model_path=settings.local_transcriber_model_path,
             min_audio_quality=settings.transcriber_min_audio_quality,
+            openai_api_key=settings.openai_api_key,
+            openai_model_name=settings.openai_transcriber_model,
         )
-        logger.info(
-            "Local transcriber enabled | backend=%s | model_path=%s",
-            settings.local_transcriber_backend,
-            settings.local_transcriber_model_path or "<unset>",
+        logger.info("OpenAI transcriber enabled")
+
+    if transcriber is not None:
+        full_result = transcriber.transcribe_audio_file(
+            audio_file_path=video_file_path,
+            language_hint=payload.language_hint,
         )
+        if full_result.text.strip():
+            transcript = full_result.text.strip()
+            logger.info(
+                "OpenAI transcription applied | status=%s | confidence=%.2f",
+                full_result.status,
+                full_result.confidence,
+            )
+        else:
+            logger.warning(
+                "OpenAI transcription not available | status=%s | reason=%s",
+                full_result.status,
+                full_result.reason,
+            )
     
     # Distribute transcript across timeline chunks
     sentences = [s.strip() for s in transcript.replace("\n", " ").split(".") if s.strip()]
@@ -107,7 +153,7 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
         
         # Extract video frame metadata
         video_metadata = video_processor.extract_frames_for_chunk(
-            video_file_path=video_file,
+            video_file_path=video_file_path,
             video_duration_sec=video_duration_sec,
             chunk_id=chunk_idx,
             start_sec=start_sec,
@@ -116,7 +162,7 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
         
         # Extract audio chunk metadata
         audio_metadata = audio_processor.extract_audio_chunk(
-            video_file_path=video_file,
+            video_file_path=video_file_path,
             chunk_id=chunk_idx,
             start_sec=start_sec,
             end_sec=end_sec,
@@ -130,23 +176,6 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
             slide_context=slide_context,
         )
 
-        if transcriber is not None:
-            transcription = transcriber.transcribe_chunk(
-                audio_file_path=audio_metadata.audio_file_path,
-                audio_metadata=audio_metadata,
-                fallback_text=chunk_text,
-                language_hint=payload.language_hint,
-            )
-            chunk_text = transcription.text
-            alignment.text_excerpt = chunk_text
-            logger.debug(
-                "Chunk %s transcription | backend=%s | status=%s | confidence=%.2f",
-                chunk_idx,
-                transcription.backend,
-                transcription.status,
-                transcription.confidence,
-            )
-        
         chunks.append(
             PitchChunk(
                 chunk_id=chunk_idx,

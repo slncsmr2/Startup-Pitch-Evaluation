@@ -6,3 +6,8 @@ pytest==8.4.1
 httpx==0.28.1
 jupyterlab==4.3.5
 ipykernel==6.29.5
+openai==1.108.1
+langdetect==1.0.9
+numpy==2.2.6
+opencv-python-headless==4.10.0.84
+mediapipe==0.10.14
