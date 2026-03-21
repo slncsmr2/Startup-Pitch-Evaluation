@@ -34,6 +34,80 @@ class StartupPitchPipeline:
             f"use_local_transcriber={settings.use_local_transcriber}"
         )
 
+    @staticmethod
+    def _update_runtime_state(
+        chunk,
+        visual_success_chunks: int,
+        audio_success_chunks: int,
+    ) -> tuple[int, int, str, str]:
+        video_metadata = chunk.alignment.video_metadata
+        audio_metadata = chunk.alignment.audio_metadata
+        if video_metadata and getattr(video_metadata, "extraction_status", "") == "success":
+            visual_success_chunks += 1
+        if getattr(audio_metadata, "extraction_status", "") == "success":
+            audio_success_chunks += 1
+        return (
+            visual_success_chunks,
+            audio_success_chunks,
+            chunk.alignment.transcription_backend,
+            chunk.alignment.transcription_status,
+        )
+
+    def _extract_features_parallel(self, executor, chunk, payload: PitchInput, user_stage: str) -> tuple[dict, dict, dict]:
+        text_future = executor.submit(
+            self.text_extractor.extract,
+            chunk.text,
+            payload.language_hint,
+            chunk.slide_context,
+        )
+        visual_future = executor.submit(
+            self.visual_extractor.extract,
+            chunk.slide_context,
+            chunk.chunk_id,
+            user_stage,
+            video_metadata=chunk.alignment.video_metadata,
+        )
+        audio_future = executor.submit(
+            self.audio_extractor.extract,
+            chunk.text,
+            audio_metadata=chunk.alignment.audio_metadata,
+        )
+        return text_future.result(), visual_future.result(), audio_future.result()
+
+    @staticmethod
+    def _compute_processing_mode(
+        visual_success_chunks: int,
+        audio_success_chunks: int,
+        transcription_backend: str,
+        transcription_status: str,
+    ) -> tuple[str, list[str]]:
+        processing_notes: list[str] = []
+        if visual_success_chunks > 0 and audio_success_chunks > 0:
+            processing_option = "option1-local-av"
+            processing_notes.append("OpenCV/MediaPipe frame extraction and ffmpeg audio extraction are active")
+        elif transcription_backend == "faster-whisper-local" and transcription_status in {"ok", "empty"}:
+            processing_option = "option2-asr-backup"
+            processing_notes.append("Local faster-whisper ASR backup is active")
+        elif transcription_backend == "openai-whisper-api" and transcription_status in {"ok", "empty"}:
+            processing_option = "asr-cloud-fallback"
+            processing_notes.append("OpenAI Whisper ASR fallback is active")
+        else:
+            processing_option = "transcript-fallback"
+            processing_notes.append("Using provided transcript due to unavailable local AV/ASR backends")
+
+        processing_notes.append(f"visual_success_chunks={visual_success_chunks}")
+        processing_notes.append(f"audio_success_chunks={audio_success_chunks}")
+        processing_notes.append(f"transcriber={transcription_backend}:{transcription_status}")
+        return processing_option, processing_notes
+
+    @staticmethod
+    def _compute_investment_band(overall_score: float) -> str:
+        if overall_score >= 8.0:
+            return "high-potential"
+        if overall_score >= 6.0:
+            return "watchlist"
+        return "early-risk"
+
     def evaluate(self, payload: PitchInput, request_id: str) -> EvaluationResponse:
         chunks = temporal_synchronize_and_segment(payload, self.window_seconds)
         chunk_reports: list[ChunkReport] = []
@@ -54,37 +128,19 @@ class StartupPitchPipeline:
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             for chunk in chunks:
-                video_metadata = chunk.alignment.video_metadata
-                audio_metadata = chunk.alignment.audio_metadata
-                if video_metadata and getattr(video_metadata, "extraction_status", "") == "success":
-                    visual_success_chunks += 1
-                if getattr(audio_metadata, "extraction_status", "") == "success":
-                    audio_success_chunks += 1
-                transcription_backend = chunk.alignment.transcription_backend
-                transcription_status = chunk.alignment.transcription_status
+                (
+                    visual_success_chunks,
+                    audio_success_chunks,
+                    transcription_backend,
+                    transcription_status,
+                ) = self._update_runtime_state(chunk, visual_success_chunks, audio_success_chunks)
 
-                text_future = executor.submit(
-                    self.text_extractor.extract,
-                    chunk.text,
-                    payload.language_hint,
-                    chunk.slide_context,
-                )
-                visual_future = executor.submit(
-                    self.visual_extractor.extract,
-                    chunk.slide_context,
-                    chunk.chunk_id,
+                text_features, visual_features, audio_features = self._extract_features_parallel(
+                    executor,
+                    chunk,
+                    payload,
                     user_stage,
-                    video_metadata=chunk.alignment.video_metadata,
                 )
-                audio_future = executor.submit(
-                    self.audio_extractor.extract,
-                    chunk.text,
-                    audio_metadata=chunk.alignment.audio_metadata,
-                )
-
-                text_features = text_future.result()
-                visual_features = visual_future.result()
-                audio_features = audio_future.result()
                 language_predictions.append(text_features["language_detected"])
 
                 fused = fuse_modalities(text_features, visual_features, audio_features)
@@ -135,29 +191,13 @@ class StartupPitchPipeline:
             top_risks=sorted_risks,
         )
 
-        if overall_score >= 8.0:
-            investment_band = "high-potential"
-        elif overall_score >= 6.0:
-            investment_band = "watchlist"
-        else:
-            investment_band = "early-risk"
-
-        processing_notes: list[str] = []
-        if visual_success_chunks > 0 and audio_success_chunks > 0:
-            processing_option = "option1-local-av"
-            processing_notes.append("OpenCV/MediaPipe frame extraction and ffmpeg audio extraction are active")
-        elif transcription_backend == "faster-whisper-local" and transcription_status in {"ok", "empty"}:
-            processing_option = "option2-asr-backup"
-            processing_notes.append("Local faster-whisper ASR backup is active")
-        elif transcription_backend == "openai-whisper-api" and transcription_status in {"ok", "empty"}:
-            processing_option = "asr-cloud-fallback"
-            processing_notes.append("OpenAI Whisper ASR fallback is active")
-        else:
-            processing_option = "transcript-fallback"
-            processing_notes.append("Using provided transcript due to unavailable local AV/ASR backends")
-        processing_notes.append(f"visual_success_chunks={visual_success_chunks}")
-        processing_notes.append(f"audio_success_chunks={audio_success_chunks}")
-        processing_notes.append(f"transcriber={transcription_backend}:{transcription_status}")
+        investment_band = self._compute_investment_band(overall_score)
+        processing_option, processing_notes = self._compute_processing_mode(
+            visual_success_chunks,
+            audio_success_chunks,
+            transcription_backend,
+            transcription_status,
+        )
 
         language_detected = max(set(language_predictions), key=language_predictions.count)
 

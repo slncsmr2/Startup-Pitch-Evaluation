@@ -6,7 +6,6 @@ def test_video_processor_missing_video_returns_safe_metadata() -> None:
     processor = VideoProcessor(frame_extraction_enabled=True)
     metadata = processor.extract_frames_for_chunk(
         video_file_path="does_not_exist.mp4",
-        video_duration_sec=10,
         chunk_id=0,
         start_sec=0,
         end_sec=5,

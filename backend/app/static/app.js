@@ -455,6 +455,6 @@ pitchVideo.addEventListener("ended", () => {
 });
 
 // Load videos on page start
-loadVideoList();
+await loadVideoList();
 
 renderPitchPreview(toPayload());

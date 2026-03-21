@@ -1,72 +1,63 @@
 # Startup-Pitch-Evaluation
 
-Multimodal AI backend for evaluating startup pitch quality using text, visual, and audio feature pipelines.
+Multimodal startup pitch evaluation backend with a FastAPI API, shared CLI inference, chunk-level scoring, and optional local/cloud transcription fallbacks.
 
-## What this project includes
+## Current status
 
-- FastAPI service with evaluation and batch evaluation endpoints
-- Modular pipeline with parallel feature extraction across modalities:
-  - Text processing (NLP) with language detection
-  - Visual analysis (CV) for delivery and confidence signals
-  - Audio processing (DSP) for prosody and pace analysis
-- Cross-modal fusion with attention weight tracking
-- Hierarchical scoring with 10 quantitative metrics
-- Risk flag detection and automated insights
-- CLI and REST API with identical inference logic
-- Jupyter notebook integration for interactive analysis
+- FastAPI service with single and batch pitch evaluation
+- Shared inference engine used by API and CLI (`InferenceService`)
+- 5-second timeline chunking with synchronized text/audio/visual metadata
+- Deterministic fallback behavior when AV dependencies or media files are unavailable
+- Optional local faster-whisper and OpenAI Whisper API transcription paths
+- Static frontend served by the API root route
+- Training, evaluation, and runtime benchmark scripts
 
-## Architecture
+## Architecture summary
 
-- **Input & Preprocessing**: Video, slides, and user details accepted; temporal synchronization in 5-second chunks
-- **Feature Extraction** (parallel):
-  - Text: Speech transcription, language detection, text embeddings
-  - Visual: Frame analysis, delivery and confidence signals, visual embeddings
-  - Audio: Prosody analysis, voice pace and energy signals, audio embeddings
-- **Fusion & Scoring**: Cross-modal weighted fusion with 10 scoring metrics (0-10 scale)
-- **Output**: Aggregate score, investment band, risk flags, and automated feedback
-- **Explainability**: Per-chunk visualizations with modality attention weights and risk distribution
+1. Input payload is normalized (title, transcript/video text, slides, user details).
+2. Preprocessing creates chunk windows (`window_seconds=5` by default).
+3. Per chunk, text/visual/audio features are extracted in parallel.
+4. Modalities are fused into attention weights and scored into 10 quantitative metrics.
+5. Risk flags, strengths/weaknesses/suggestions, and dashboard series are generated.
 
 ## Project structure
 
 ```text
-backend/
-  app/
-    core/config.py
-    main.py
-    pipeline.py
-    schemas.py
-    services/
-      preprocessing.py
-      extractors.py
-      fusion.py
-      scoring.py
-      reporting.py
-      audio_processor.py
-      video_processor.py
-      transcriber.py
-  models/
-    text_encoder.py
-    visual_encoder.py
-    audio_encoder.py
-    fusion_head.py
-    scoring_head.py
-  tests/
-    test_api.py
-    test_pipeline.py
-    test_transcriber.py
-  scripts/
-    infer_cli.py
-    train.py
-    evaluate.py
-  requirements.txt
-
-notebooks/
-  Startup_Pitch_Evaluation.ipynb
+.
+├── backend/
+│   ├── app/
+│   │   ├── core/config.py
+│   │   ├── main.py
+│   │   ├── pipeline.py
+│   │   ├── schemas.py
+│   │   ├── services/
+│   │   │   ├── inference.py
+│   │   │   ├── preprocessing.py
+│   │   │   ├── transcriber.py
+│   │   │   ├── audio_processor.py
+│   │   │   ├── video_processor.py
+│   │   │   ├── extractors.py
+│   │   │   ├── fusion.py
+│   │   │   ├── scoring.py
+│   │   │   ├── risk.py
+│   │   │   └── reporting.py
+│   │   └── static/
+│   ├── models/
+│   │   ├── config/
+│   │   └── checkpoints/
+│   ├── scripts/
+│   │   ├── infer_cli.py
+│   │   ├── train.py
+│   │   ├── evaluate.py
+│   │   └── benchmark_runtime.py
+│   ├── tests/
+│   ├── training/
+│   └── requirements.txt
+├── LICENSE
+└── README.md
 ```
 
-## Quick start
-
-### Running the API
+## Quick start (Windows PowerShell)
 
 ```powershell
 cd backend
@@ -76,120 +67,117 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-The API will be available at:
+Service URLs:
 
-- `http://127.0.0.1:8000/health` - Health check
-- `http://127.0.0.1:8000/docs` - Interactive API documentation
+- `http://127.0.0.1:8000/` (static frontend)
+- `http://127.0.0.1:8000/docs` (OpenAPI docs)
+- `http://127.0.0.1:8000/health`
 
-### Running with Jupyter notebooks
+## API endpoints
 
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m ipykernel install --user --name startup-pitch-eval --display-name "Python (startup-pitch-eval)"
-cd ..
-jupyter lab
-```
+- `GET /health` - service health/version
+- `GET /` - serves frontend UI (`backend/app/static/index.html`)
+- `POST /evaluate` - evaluate one pitch (`PitchInput`)
+- `POST /evaluate/batch` - evaluate list of pitches (`BatchEvaluationRequest`)
+- `GET /videos` - list videos from `backend/outputs/batch_input`
+- `GET /videos/{video_name}` - stream one video from batch input directory
 
-Then open `notebooks/Startup_Pitch_Evaluation.ipynb`.
+## Request/response highlights
 
-## Sample evaluation request
+Input model (`PitchInput`) supports:
 
-```powershell
-curl -X POST "http://127.0.0.1:8000/evaluate" ^
-	-H "Content-Type: application/json" ^
-	-d "{\"title\":\"Startup Example A\",\"transcript\":\"\",\"language_hint\":\"en-ta\",\"presenter_profile\":{\"experience\":\"5 years\"},\"video\":{\"file_name\":\"startup_example_a_pitch.mp4\",\"file_format\":\"mp4\",\"duration_sec\":120,\"transcript_text\":\"We solve an industry workflow problem with bilingual AI support. Our pilot improved adoption and operational outcomes.\"},\"slides\":[{\"title\":\"Problem\",\"content\":\"Current workflow creates measurable loss\"},{\"title\":\"Market\",\"content\":\"Large underserved customer segment\"},{\"title\":\"Traction\",\"content\":\"Pilot growth and repeat usage\"}],\"user_details\":{\"founder_name\":\"Founder Example\",\"startup_name\":\"Startup Example A\",\"sector\":\"Industry Segment\",\"stage\":\"Seed\"}}"
-```
+- `title`, `transcript`, `language_hint`
+- `video` (`file_name`, `file_format`, `duration_sec`, `transcript_text`)
+- `slides` and/or `slide_text`
+- `presenter_profile` and `user_details`
 
-## Sample batch request
+Response (`EvaluationResponse`) includes:
 
-```powershell
-curl -X POST "http://127.0.0.1:8000/evaluate/batch" ^
-	-H "Content-Type: application/json" ^
-	-d "{\"pitches\":[{\"title\":\"Startup Example A\",\"transcript\":\"We solve a high-frequency operational problem for a target segment.\",\"language_hint\":\"en-ta\",\"slide_text\":[\"Problem\",\"Solution\"]},{\"title\":\"Startup Example B\",\"transcript\":\"We improve planning quality and reduce waste for local businesses.\",\"language_hint\":\"en-ta\",\"slide_text\":[\"Problem\",\"Traction\"]}]}"
-```
+- `summary.overall_score`, `summary.confidence_score`
+- `summary.investment_band` (`high-potential`, `watchlist`, `early-risk`)
+- `summary.language_detected` (`en`, `ta`, `ta-en`)
+- `summary.processing_option` and `summary.processing_notes`
+- `chunk_reports[]` with metric-level scores, attention, and risk flags
+- `dashboard` series for quantitative metrics, modality weights, and risk distribution
 
-## Output highlights
+## CLI usage
 
-- `summary.investment_band`: `high-potential`, `watchlist`, or `early-risk`
-- `summary.language_detected`: detected language profile (`en`, `ta`, `ta-en`)
-- `chunk_reports[].attention`: text/visual/audio contribution weights
-- `chunk_reports[].risk_flags`: detected risk hints such as overclaim or weak traction evidence
-- `dashboard.quantitative_scores`: 10 chart-ready metrics for investor UI
+All scripts run from `backend/`.
 
-## Contributing
-
-Contributions are welcome for feature improvements, bug fixes, tests, documentation, and model integration.
-
-### Development setup
-
-1. Fork the repository.
-2. Clone your fork and move to the backend directory.
-3. Create and activate a virtual environment.
-4. Install dependencies and run tests.
+Single-video inference:
 
 ```powershell
-git clone <your-fork-url>
-cd Startup-Pitch-Evaluation/backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pytest -q
+python scripts/infer_cli.py --video outputs/batch_input/sample.mp4 --duration-sec 90 --language-hint en-ta --output outputs/sample_eval.json
 ```
 
-### Contribution workflow
+Batch-video inference:
 
-1. Create a feature branch from main.
-2. Make focused changes with clear commit messages.
-3. Add or update tests for all behavior changes.
-4. Ensure all tests pass locally.
-5. Open a pull request with a concise summary.
+```powershell
+python scripts/infer_cli.py --batch-dir outputs/batch_input --duration-sec 90 --batch-output-dir outputs/batch_results --output outputs/batch_summary.json
+```
 
-### Pull request checklist
+Train:
 
-- Code is readable and scoped to one logical change.
-- New or changed behavior is covered by tests.
-- README or docs are updated when API behavior changes.
-- No sensitive data, secrets, or private files are committed.
+```powershell
+python scripts/train.py --config models/config/training_cpu.yaml
+```
 
-### Coding guidelines
+Evaluate checkpoint:
 
-- Keep API schemas backward-compatible when possible.
-- Prefer small, composable service functions.
-- Use clear naming for scoring and reporting outputs.
-- Keep sample data generic and free of personal identifiers.
+```powershell
+python scripts/evaluate.py --config models/config/training_cpu.yaml --checkpoint models/checkpoints/training_cpu_checkpoint.json
+```
 
-## Notes
+Benchmark runtime:
 
-- Current feature extraction and fusion are deterministic placeholder implementations designed for fast iteration.
-- You can replace individual service modules with real model inference (Whisper, wav2vec2, ViT, multimodal transformers) without changing API contracts.
+```powershell
+python scripts/benchmark_runtime.py --runs 5 --duration-sec 60 --output outputs/benchmark_runtime.json
+```
 
-## Optional OpenAI Whisper API transcription
+## Configuration
 
-The backend can transcribe a full local video file via OpenAI Whisper API and then align text across 5-second chunks.
+Environment variables use the `SPE_` prefix and are loaded from `.env` at repository root and/or `backend/.env`.
 
-Set these environment variables in `backend/.env`:
+Core flags:
 
 ```text
+SPE_USE_HEURISTIC_PIPELINE=true
 SPE_USE_LOCAL_TRANSCRIBER=true
-SPE_OPENAI_API_KEY=<your_openai_api_key>
-SPE_OPENAI_TRANSCRIBER_MODEL=whisper-1
-SPE_MEDIA_LOOKUP_DIR=outputs/batch_input
 SPE_ENABLE_VISUAL_EXTRACTION=true
 SPE_ENABLE_AUDIO_EXTRACTION=true
+SPE_CHUNK_WINDOW_SECONDS=5
+SPE_MEDIA_LOOKUP_DIR=outputs/batch_input
 ```
 
-`SPE_MEDIA_LOOKUP_DIR` is resolved relative to `backend/` unless absolute.
-`SPE_ENABLE_VISUAL_EXTRACTION` and `SPE_ENABLE_AUDIO_EXTRACTION` control local CV/DSP chunk extraction.
+Transcriber selection:
 
-For local CV/DSP extraction, install ffmpeg on your machine and ensure it is available on PATH.
-When installed, MediaPipe is also used for additional face/pose/gesture cues.
+```text
+SPE_TRANSCRIBER_BACKEND=auto
+SPE_TRANSCRIBER_MIN_AUDIO_QUALITY=0.35
+SPE_FASTER_WHISPER_MODEL_SIZE=small
+SPE_FASTER_WHISPER_DEVICE=cpu
+SPE_FASTER_WHISPER_COMPUTE_TYPE=int8
+SPE_OPENAI_API_KEY=
+SPE_OPENAI_TRANSCRIBER_MODEL=whisper-1
+```
 
-## Run tests
+Notes:
+
+- `auto` transcriber mode tries local faster-whisper first, then OpenAI Whisper API.
+- `SPE_MEDIA_LOOKUP_DIR` is resolved relative to `backend/` unless absolute.
+- Audio extraction uses ffmpeg; if not on PATH, `imageio-ffmpeg` fallback is attempted.
+
+## Tests
 
 ```powershell
 cd backend
 pytest -q
 ```
+
+The current suite covers API parity with shared inference, pipeline response shape, language detection behavior, transcriber fallback behavior, and audio/video processor fallback safety.
+
+## Notes for contributors
+
+- Keep API schema changes backward-compatible where possible.
+- Keep API and CLI behavior consistent through `app/services/inference.py`.
+- Update docs and tests whenever endpoint behavior or configuration semantics change.

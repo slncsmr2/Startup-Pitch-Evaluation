@@ -261,14 +261,7 @@ def build_local_transcriber(
             min_audio_quality=min_audio_quality,
         )
 
-    if openai_api_key.strip():
-        return OpenAIWhisperAPITranscriber(
-            api_key=openai_api_key,
-            model_name=openai_model_name,
-            min_audio_quality=min_audio_quality,
-        )
-
-    # Prefer local faster-whisper when no OpenAI key is provided.
+    # In auto mode, prefer local faster-whisper first.
     fw_transcriber = FasterWhisperLocalTranscriber(
         model_size=faster_whisper_model_size,
         device=faster_whisper_device,
@@ -278,6 +271,7 @@ def build_local_transcriber(
     if fw_transcriber._get_model() is not None:
         return fw_transcriber
 
+    # Fall back to OpenAI only when local backend is unavailable.
     return OpenAIWhisperAPITranscriber(
         api_key=openai_api_key,
         model_name=openai_model_name,

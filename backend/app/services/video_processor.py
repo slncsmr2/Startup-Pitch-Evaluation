@@ -55,7 +55,6 @@ class VideoProcessor:
     def extract_frames_for_chunk(
         self,
         video_file_path: str,
-        video_duration_sec: int,
         chunk_id: int,
         start_sec: int,
         end_sec: int,
@@ -66,7 +65,6 @@ class VideoProcessor:
         
         Args:
             video_file_path: Path to video file
-            video_duration_sec: Total video duration
             chunk_id: Chunk identifier
             start_sec: Chunk start time (seconds)
             end_sec: Chunk end time (seconds)
@@ -80,7 +78,7 @@ class VideoProcessor:
 
         if not self.frame_extraction_enabled:
             logger.debug("Frame extraction skipped for chunk %s (not enabled)", chunk_id)
-            return FrameExtractMetadata(
+            return self._build_metadata(
                 chunk_id=chunk_id,
                 start_sec=start_sec,
                 end_sec=end_sec,
@@ -88,13 +86,11 @@ class VideoProcessor:
                 frame_dir=str(frame_dir),
                 frame_hash=frame_hash,
                 extraction_status="skipped",
-                face_ratio=0.0,
-                motion_score=0.0,
             )
 
         if not Path(video_file_path).is_file():
             logger.warning("Frame extraction skipped; video missing: %s", video_file_path)
-            return FrameExtractMetadata(
+            return self._build_metadata(
                 chunk_id=chunk_id,
                 start_sec=start_sec,
                 end_sec=end_sec,
@@ -102,16 +98,12 @@ class VideoProcessor:
                 frame_dir=str(frame_dir),
                 frame_hash=frame_hash,
                 extraction_status="missing-video",
-                face_ratio=0.0,
-                motion_score=0.0,
             )
 
-        try:
-            import cv2  # type: ignore
-            import numpy as np  # type: ignore
-        except Exception as exc:
-            logger.warning("OpenCV/Numpy unavailable for frame extraction: %s", exc)
-            return FrameExtractMetadata(
+        cv2, np, cv_error = self._import_cv_backends()
+        if cv2 is None or np is None:
+            logger.warning("OpenCV/Numpy unavailable for frame extraction: %s", cv_error)
+            return self._build_metadata(
                 chunk_id=chunk_id,
                 start_sec=start_sec,
                 end_sec=end_sec,
@@ -119,16 +111,94 @@ class VideoProcessor:
                 frame_dir=str(frame_dir),
                 frame_hash=frame_hash,
                 extraction_status="backend-unavailable",
-                face_ratio=0.0,
-                motion_score=0.0,
-                eye_contact_score=0.0,
-                pose_ratio=0.0,
-                gesture_energy=0.0,
             )
 
-        mediapipe_ready = True
-        mp_face_mesh = None
-        mp_pose = None
+        mediapipe_ready, mp_face_mesh, mp_pose = self._init_mediapipe_models()
+
+        frame_dir.mkdir(parents=True, exist_ok=True)
+        capture = cv2.VideoCapture(video_file_path)
+        if not capture.isOpened():
+            logger.warning("Unable to open video for frame extraction: %s", video_file_path)
+            return self._build_metadata(
+                chunk_id=chunk_id,
+                start_sec=start_sec,
+                end_sec=end_sec,
+                frame_count=0,
+                frame_dir=str(frame_dir),
+                frame_hash=frame_hash,
+                extraction_status="missing-video",
+            )
+
+        metrics = self._extract_frame_metrics(
+            capture=capture,
+            frame_dir=frame_dir,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            frames_per_chunk=frames_per_chunk,
+            cv2=cv2,
+            np=np,
+            mediapipe_ready=mediapipe_ready,
+            mp_face_mesh=mp_face_mesh,
+            mp_pose=mp_pose,
+        )
+        status = "success" if metrics["extracted"] > 0 else "backend-unavailable"
+        return self._build_metadata(
+            chunk_id=chunk_id,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            frame_count=metrics["extracted"],
+            frame_dir=str(frame_dir),
+            frame_hash=frame_hash,
+            extraction_status=status,
+            face_ratio=metrics["face_ratio"],
+            motion_score=metrics["motion_score"],
+            eye_contact_score=metrics["eye_contact_score"],
+            pose_ratio=metrics["pose_ratio"],
+            gesture_energy=metrics["gesture_energy"],
+        )
+
+    @staticmethod
+    def _import_cv_backends():
+        try:
+            import cv2  # type: ignore
+            import numpy as np  # type: ignore
+
+            return cv2, np, None
+        except Exception as exc:
+            return None, None, exc
+
+    @staticmethod
+    def _build_metadata(
+        chunk_id: int,
+        start_sec: int,
+        end_sec: int,
+        frame_count: int,
+        frame_dir: str,
+        frame_hash: str,
+        extraction_status: str,
+        face_ratio: float = 0.0,
+        motion_score: float = 0.0,
+        eye_contact_score: float = 0.0,
+        pose_ratio: float = 0.0,
+        gesture_energy: float = 0.0,
+    ) -> FrameExtractMetadata:
+        return FrameExtractMetadata(
+            chunk_id=chunk_id,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            frame_count=frame_count,
+            frame_dir=frame_dir,
+            frame_hash=frame_hash,
+            extraction_status=extraction_status,
+            face_ratio=round(max(0.0, min(1.0, face_ratio)), 3),
+            motion_score=round(max(0.0, min(1.0, motion_score)), 3),
+            eye_contact_score=round(max(0.0, min(1.0, eye_contact_score)), 3),
+            pose_ratio=round(max(0.0, min(1.0, pose_ratio)), 3),
+            gesture_energy=round(max(0.0, min(1.0, gesture_energy)), 3),
+        )
+
+    @staticmethod
+    def _init_mediapipe_models():
         try:
             import mediapipe as mp  # type: ignore
 
@@ -143,26 +213,24 @@ class VideoProcessor:
                 model_complexity=1,
                 min_detection_confidence=0.5,
             )
+            return True, mp_face_mesh, mp_pose
         except Exception as exc:
-            mediapipe_ready = False
             logger.info("MediaPipe unavailable, using OpenCV-only visual metrics: %s", exc)
+            return False, None, None
 
-        frame_dir.mkdir(parents=True, exist_ok=True)
-        capture = cv2.VideoCapture(video_file_path)
-        if not capture.isOpened():
-            logger.warning("Unable to open video for frame extraction: %s", video_file_path)
-            return FrameExtractMetadata(
-                chunk_id=chunk_id,
-                start_sec=start_sec,
-                end_sec=end_sec,
-                frame_count=0,
-                frame_dir=str(frame_dir),
-                frame_hash=frame_hash,
-                extraction_status="missing-video",
-                face_ratio=0.0,
-                motion_score=0.0,
-            )
-
+    def _extract_frame_metrics(
+        self,
+        capture,
+        frame_dir: Path,
+        start_sec: int,
+        end_sec: int,
+        frames_per_chunk: int,
+        cv2,
+        np,
+        mediapipe_ready: bool,
+        mp_face_mesh,
+        mp_pose,
+    ) -> dict[str, float | int]:
         timestamps = self._sample_timestamps(start_sec=start_sec, end_sec=end_sec, count=frames_per_chunk)
         cascade = self._load_face_detector(cv2)
         extracted = 0
@@ -175,43 +243,24 @@ class VideoProcessor:
 
         try:
             for idx, ts in enumerate(timestamps):
-                capture.set(cv2.CAP_PROP_POS_MSEC, max(0.0, ts * 1000.0))
-                ok, frame = capture.read()
-                if not ok or frame is None:
+                frame = self._read_frame(capture, cv2, ts)
+                if frame is None:
                     continue
 
                 extracted += 1
-                frame_path = frame_dir / f"frame_{idx:02d}.jpg"
-                cv2.imwrite(str(frame_path), frame)
+                gray = self._save_and_grayscale_frame(cv2, frame, frame_dir, idx)
 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 if cascade is not None:
-                    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(40, 40))
-                    if len(faces) > 0:
-                        face_hits += 1
+                    face_hits += self._detect_face_hit(cascade, gray)
 
-                if mediapipe_ready and mp_face_mesh is not None and mp_pose is not None:
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    face_result = mp_face_mesh.process(frame_rgb)
-                    if face_result.multi_face_landmarks:
-                        face_hits += 1
-                        face_landmarks = face_result.multi_face_landmarks[0].landmark
-                        nose_x = float(face_landmarks[1].x)
-                        eye_contact_sum += max(0.0, 1.0 - abs(0.5 - nose_x) * 2.0)
+                if mediapipe_ready:
+                    mp_values = self._analyze_mediapipe_frame(cv2, frame, mp_face_mesh, mp_pose)
+                    face_hits += mp_values["face_hits"]
+                    eye_contact_sum += mp_values["eye_contact"]
+                    pose_hits += mp_values["pose_hits"]
+                    gesture_sum += mp_values["gesture"]
 
-                    pose_result = mp_pose.process(frame_rgb)
-                    if pose_result.pose_landmarks:
-                        pose_hits += 1
-                        lm = pose_result.pose_landmarks.landmark
-                        l_shoulder, r_shoulder = lm[11], lm[12]
-                        l_wrist, r_wrist = lm[15], lm[16]
-                        left_move = abs(float(l_wrist.y) - float(l_shoulder.y))
-                        right_move = abs(float(r_wrist.y) - float(r_shoulder.y))
-                        gesture_sum += min(1.0, (left_move + right_move) / 2.0)
-
-                if previous_gray is not None:
-                    diff = cv2.absdiff(gray, previous_gray)
-                    motion_sum += float(np.mean(diff) / 255.0)
+                motion_sum += self._compute_motion_delta(cv2, np, previous_gray, gray)
                 previous_gray = gray
         finally:
             capture.release()
@@ -220,27 +269,72 @@ class VideoProcessor:
             if mp_pose is not None:
                 mp_pose.close()
 
-        status = "success" if extracted > 0 else "backend-unavailable"
-        face_ratio = (face_hits / extracted) if extracted else 0.0
-        motion_score = (motion_sum / max(1, extracted - 1)) if extracted > 1 else 0.0
-        eye_contact_score = (eye_contact_sum / extracted) if extracted else 0.0
-        pose_ratio = (pose_hits / extracted) if extracted else 0.0
-        gesture_energy = (gesture_sum / max(1, pose_hits)) if pose_hits > 0 else 0.0
+        return {
+            "extracted": extracted,
+            "face_ratio": (face_hits / extracted) if extracted else 0.0,
+            "motion_score": (motion_sum / max(1, extracted - 1)) if extracted > 1 else 0.0,
+            "eye_contact_score": (eye_contact_sum / extracted) if extracted else 0.0,
+            "pose_ratio": (pose_hits / extracted) if extracted else 0.0,
+            "gesture_energy": (gesture_sum / max(1, pose_hits)) if pose_hits > 0 else 0.0,
+        }
 
-        return FrameExtractMetadata(
-            chunk_id=chunk_id,
-            start_sec=start_sec,
-            end_sec=end_sec,
-            frame_count=extracted,
-            frame_dir=str(frame_dir),
-            frame_hash=frame_hash,
-            extraction_status=status,
-            face_ratio=round(max(0.0, min(1.0, face_ratio)), 3),
-            motion_score=round(max(0.0, min(1.0, motion_score)), 3),
-            eye_contact_score=round(max(0.0, min(1.0, eye_contact_score)), 3),
-            pose_ratio=round(max(0.0, min(1.0, pose_ratio)), 3),
-            gesture_energy=round(max(0.0, min(1.0, gesture_energy)), 3),
-        )
+    @staticmethod
+    def _read_frame(capture, cv2, timestamp: float):
+        capture.set(cv2.CAP_PROP_POS_MSEC, max(0.0, timestamp * 1000.0))
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            return None
+        return frame
+
+    @staticmethod
+    def _save_and_grayscale_frame(cv2, frame, frame_dir: Path, frame_idx: int):
+        cv2.imwrite(str(frame_dir / f"frame_{frame_idx:02d}.jpg"), frame)
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    @staticmethod
+    def _detect_face_hit(cascade, gray) -> int:
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(40, 40))
+        return 1 if len(faces) > 0 else 0
+
+    @staticmethod
+    def _analyze_mediapipe_frame(cv2, frame, mp_face_mesh, mp_pose) -> dict[str, float | int]:
+        if mp_face_mesh is None or mp_pose is None:
+            return {"face_hits": 0, "eye_contact": 0.0, "pose_hits": 0, "gesture": 0.0}
+
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_hits = 0
+        eye_contact = 0.0
+        pose_hits = 0
+        gesture = 0.0
+
+        face_result = mp_face_mesh.process(frame_rgb)
+        if face_result.multi_face_landmarks:
+            face_hits = 1
+            face_landmarks = face_result.multi_face_landmarks[0].landmark
+            nose_x = float(face_landmarks[1].x)
+            eye_contact = max(0.0, 1.0 - abs(0.5 - nose_x) * 2.0)
+
+        pose_result = mp_pose.process(frame_rgb)
+        if pose_result.pose_landmarks:
+            pose_hits = 1
+            lm = pose_result.pose_landmarks.landmark
+            left_move = abs(float(lm[15].y) - float(lm[11].y))
+            right_move = abs(float(lm[16].y) - float(lm[12].y))
+            gesture = min(1.0, (left_move + right_move) / 2.0)
+
+        return {
+            "face_hits": face_hits,
+            "eye_contact": eye_contact,
+            "pose_hits": pose_hits,
+            "gesture": gesture,
+        }
+
+    @staticmethod
+    def _compute_motion_delta(cv2, np, previous_gray, gray) -> float:
+        if previous_gray is None:
+            return 0.0
+        diff = cv2.absdiff(gray, previous_gray)
+        return float(np.mean(diff) / 255.0)
 
     def _compute_frame_hash(self, video_file: str, chunk_id: int, start_sec: int, end_sec: int) -> str:
         """Deterministic hash for frame metadata consistency."""

@@ -73,6 +73,72 @@ def _resolve_video_file_path(video_file_name: str) -> str:
     return video_file_name
 
 
+def _build_transcriber() -> tuple[BaseLocalTranscriber | None, str, str]:
+    if not settings.use_local_transcriber:
+        return None, "disabled", "not-requested"
+
+    transcriber = build_local_transcriber(
+        min_audio_quality=settings.transcriber_min_audio_quality,
+        transcriber_backend=settings.transcriber_backend,
+        openai_api_key=settings.openai_api_key,
+        openai_model_name=settings.openai_transcriber_model,
+        faster_whisper_model_size=settings.faster_whisper_model_size,
+        faster_whisper_device=settings.faster_whisper_device,
+        faster_whisper_compute_type=settings.faster_whisper_compute_type,
+    )
+    logger.info("Local transcriber enabled | backend=%s", transcriber.backend_name)
+    return transcriber, transcriber.backend_name, "initialized"
+
+
+def _maybe_transcribe_full_audio(
+    transcriber: BaseLocalTranscriber | None,
+    transcript: str,
+    video_file_path: str,
+    language_hint: str,
+) -> tuple[str, str, str]:
+    if transcriber is None:
+        return transcript, "disabled", "not-requested"
+
+    full_result = transcriber.transcribe_audio_file(
+        audio_file_path=video_file_path,
+        language_hint=language_hint,
+    )
+    transcription_backend = full_result.backend
+    transcription_status = full_result.status
+    if full_result.text.strip():
+        logger.info(
+            "Local transcription applied | backend=%s | status=%s | confidence=%.2f",
+            full_result.backend,
+            full_result.status,
+            full_result.confidence,
+        )
+        return full_result.text.strip(), transcription_backend, transcription_status
+
+    logger.warning(
+        "Local transcription not available | backend=%s | status=%s | reason=%s",
+        full_result.backend,
+        full_result.status,
+        full_result.reason,
+    )
+    return transcript, transcription_backend, transcription_status
+
+
+def _split_sentences(transcript: str) -> list[str]:
+    sentences = [s.strip() for s in transcript.replace("\n", " ").split(".") if s.strip()]
+    if sentences:
+        return sentences
+    return [transcript if transcript else "No transcript available"]
+
+
+def _resolve_chunk_text(sentences: list[str], words: list[str], chunk_idx: int, words_per_chunk: int) -> str:
+    text_start_word = chunk_idx * words_per_chunk
+    text_end_word = min((chunk_idx + 1) * words_per_chunk, len(words))
+    chunk_text = " ".join(words[text_start_word:text_end_word]) if text_start_word < len(words) else ""
+    if chunk_text:
+        return chunk_text
+    return sentences[min(chunk_idx, len(sentences) - 1)].strip()
+
+
 def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 5) -> list[PitchChunk]:
     """
     Synchronizes transcript/video/slide context using true timeline chunking.
@@ -104,49 +170,16 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
     # Initialize processors for audio/video chunk metadata
     video_processor = VideoProcessor(frame_extraction_enabled=settings.enable_visual_extraction)
     audio_processor = AudioProcessor(audio_extraction_enabled=settings.enable_audio_extraction)
-    transcriber: BaseLocalTranscriber | None = None
-    transcription_backend = "disabled"
-    transcription_status = "not-requested"
-    if settings.use_local_transcriber:
-        transcriber = build_local_transcriber(
-            min_audio_quality=settings.transcriber_min_audio_quality,
-            transcriber_backend=settings.transcriber_backend,
-            openai_api_key=settings.openai_api_key,
-            openai_model_name=settings.openai_transcriber_model,
-            faster_whisper_model_size=settings.faster_whisper_model_size,
-            faster_whisper_device=settings.faster_whisper_device,
-            faster_whisper_compute_type=settings.faster_whisper_compute_type,
-        )
-        transcription_backend = transcriber.backend_name
-        logger.info("Local transcriber enabled | backend=%s", transcriber.backend_name)
-
-    if transcriber is not None:
-        full_result = transcriber.transcribe_audio_file(
-            audio_file_path=video_file_path,
-            language_hint=payload.language_hint,
-        )
-        transcription_backend = full_result.backend
-        transcription_status = full_result.status
-        if full_result.text.strip():
-            transcript = full_result.text.strip()
-            logger.info(
-                "Local transcription applied | backend=%s | status=%s | confidence=%.2f",
-                full_result.backend,
-                full_result.status,
-                full_result.confidence,
-            )
-        else:
-            logger.warning(
-                "Local transcription not available | backend=%s | status=%s | reason=%s",
-                full_result.backend,
-                full_result.status,
-                full_result.reason,
-            )
+    transcriber, transcription_backend, transcription_status = _build_transcriber()
+    transcript, transcription_backend, transcription_status = _maybe_transcribe_full_audio(
+        transcriber=transcriber,
+        transcript=transcript,
+        video_file_path=video_file_path,
+        language_hint=payload.language_hint,
+    )
     
     # Distribute transcript across timeline chunks
-    sentences = [s.strip() for s in transcript.replace("\n", " ").split(".") if s.strip()]
-    if not sentences:
-        sentences = [transcript if transcript else "No transcript available"]
+    sentences = _split_sentences(transcript)
     
     chunks: list[PitchChunk] = []
     num_chunks = max(1, (video_duration_sec + window_seconds - 1) // window_seconds)
@@ -157,17 +190,11 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
         start_sec = chunk_idx * window_seconds
         end_sec = min((chunk_idx + 1) * window_seconds, video_duration_sec)
         
-        # Assign text proportionally to timeline
-        text_start_word = chunk_idx * words_per_chunk
-        text_end_word = min((chunk_idx + 1) * words_per_chunk, len(words))
-        chunk_text = " ".join(words[text_start_word:text_end_word]) if text_start_word < len(words) else ""
-        if not chunk_text:
-            chunk_text = sentences[min(chunk_idx, len(sentences) - 1)].strip()
+        chunk_text = _resolve_chunk_text(sentences, words, chunk_idx, words_per_chunk)
         
         # Extract video frame metadata
         video_metadata = video_processor.extract_frames_for_chunk(
             video_file_path=video_file_path,
-            video_duration_sec=video_duration_sec,
             chunk_id=chunk_idx,
             start_sec=start_sec,
             end_sec=end_sec,
