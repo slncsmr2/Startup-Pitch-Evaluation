@@ -18,6 +18,8 @@ class ChunkAlignmentMetadata:
     audio_metadata: AudioChunkMetadata
     text_excerpt: str
     slide_context: str
+    transcription_backend: str = "disabled"
+    transcription_status: str = "not-requested"
 
 
 @dataclass
@@ -103,29 +105,40 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
     video_processor = VideoProcessor(frame_extraction_enabled=settings.enable_visual_extraction)
     audio_processor = AudioProcessor(audio_extraction_enabled=settings.enable_audio_extraction)
     transcriber: BaseLocalTranscriber | None = None
+    transcription_backend = "disabled"
+    transcription_status = "not-requested"
     if settings.use_local_transcriber:
         transcriber = build_local_transcriber(
             min_audio_quality=settings.transcriber_min_audio_quality,
+            transcriber_backend=settings.transcriber_backend,
             openai_api_key=settings.openai_api_key,
             openai_model_name=settings.openai_transcriber_model,
+            faster_whisper_model_size=settings.faster_whisper_model_size,
+            faster_whisper_device=settings.faster_whisper_device,
+            faster_whisper_compute_type=settings.faster_whisper_compute_type,
         )
-        logger.info("OpenAI transcriber enabled")
+        transcription_backend = transcriber.backend_name
+        logger.info("Local transcriber enabled | backend=%s", transcriber.backend_name)
 
     if transcriber is not None:
         full_result = transcriber.transcribe_audio_file(
             audio_file_path=video_file_path,
             language_hint=payload.language_hint,
         )
+        transcription_backend = full_result.backend
+        transcription_status = full_result.status
         if full_result.text.strip():
             transcript = full_result.text.strip()
             logger.info(
-                "OpenAI transcription applied | status=%s | confidence=%.2f",
+                "Local transcription applied | backend=%s | status=%s | confidence=%.2f",
+                full_result.backend,
                 full_result.status,
                 full_result.confidence,
             )
         else:
             logger.warning(
-                "OpenAI transcription not available | status=%s | reason=%s",
+                "Local transcription not available | backend=%s | status=%s | reason=%s",
+                full_result.backend,
                 full_result.status,
                 full_result.reason,
             )
@@ -174,6 +187,8 @@ def temporal_synchronize_and_segment(payload: PitchInput, window_seconds: int = 
             audio_metadata=audio_metadata,
             text_excerpt=chunk_text,
             slide_context=slide_context,
+            transcription_backend=transcription_backend,
+            transcription_status=transcription_status,
         )
 
         chunks.append(

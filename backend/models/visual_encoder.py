@@ -35,13 +35,19 @@ class VisualEncoder:
         gesture_energy = float(getattr(video_metadata, "gesture_energy", 0.0))
         duration = max(1.0, end_sec - start_sec)
         frame_coverage = min(2.0, frame_count / duration)
-        extraction_bonus = 0.8 if extraction_status == "success" else (0.35 if extraction_status == "pending" else 0.0)
+        if extraction_status == "success":
+            extraction_bonus = 0.8
+        elif extraction_status == "pending":
+            extraction_bonus = 0.35
+        else:
+            extraction_bonus = 0.0
 
-        return {
-            "embedding": self._hash_to_vector(
-                f"visual::{chunk_id}::{text}::{user_stage}::frames={frame_count}::face={face_ratio:.3f}::eye={eye_contact_score:.3f}::pose={pose_ratio:.3f}::gesture={gesture_energy:.3f}::motion={motion_score:.3f}::status={extraction_status}"
-            ),
-            "delivery_clarity": self._clamp_10(
+        missing_visual_signal = extraction_status in {"missing-video", "backend-unavailable", "skipped"}
+        if missing_visual_signal:
+            delivery_clarity = self._clamp_10(5.1 + density * 1.5 + stage_bonus * 0.2)
+            presenter_confidence = self._clamp_10(5.0 + density * 1.0 + stage_bonus * 0.5)
+        else:
+            delivery_clarity = self._clamp_10(
                 3.8
                 + density * 2.8
                 + frame_coverage * 0.9
@@ -49,8 +55,8 @@ class VisualEncoder:
                 + pose_ratio * 1.2
                 + gesture_energy * 0.7
                 + extraction_bonus
-            ),
-            "presenter_confidence": self._clamp_10(
+            )
+            presenter_confidence = self._clamp_10(
                 4.0
                 + density * 1.6
                 + stage_bonus
@@ -59,5 +65,12 @@ class VisualEncoder:
                 + eye_contact_score * 1.5
                 + pose_ratio * 1.0
                 + gesture_energy * 0.8
+            )
+
+        return {
+            "embedding": self._hash_to_vector(
+                f"visual::{chunk_id}::{text}::{user_stage}::frames={frame_count}::face={face_ratio:.3f}::eye={eye_contact_score:.3f}::pose={pose_ratio:.3f}::gesture={gesture_energy:.3f}::motion={motion_score:.3f}::status={extraction_status}"
             ),
+            "delivery_clarity": delivery_clarity,
+            "presenter_confidence": presenter_confidence,
         }

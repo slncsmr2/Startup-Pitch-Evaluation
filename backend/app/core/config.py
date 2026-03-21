@@ -1,4 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
@@ -12,11 +17,18 @@ class Settings(BaseSettings):
     enable_visual_extraction: bool = True
     enable_audio_extraction: bool = True
     transcriber_min_audio_quality: float = 0.35
+    transcriber_backend: str = "auto"
     openai_api_key: str = ""
     openai_transcriber_model: str = "whisper-1"
+    faster_whisper_model_size: str = "small"
+    faster_whisper_device: str = "cpu"
+    faster_whisper_compute_type: str = "int8"
     media_lookup_dir: str = "outputs/batch_input"
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="SPE_")
+    model_config = SettingsConfigDict(
+        env_file=(str(_PROJECT_ROOT / ".env"), str(_BACKEND_ROOT / ".env")),
+        env_prefix="SPE_",
+    )
 
 
 settings = Settings()

@@ -8,6 +8,7 @@ Uses local ffmpeg extraction and waveform statistics with deterministic fallback
 import logging
 import hashlib
 import subprocess
+import shutil
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -189,8 +190,13 @@ class AudioProcessor:
         start_sec: int,
         end_sec: int,
     ) -> bool:
+        ffmpeg_bin = self._resolve_ffmpeg_binary()
+        if not ffmpeg_bin:
+            logger.warning("ffmpeg unavailable for audio extraction")
+            return False
+
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin,
             "-hide_banner",
             "-loglevel",
             "error",
@@ -217,6 +223,18 @@ class AudioProcessor:
         except Exception as exc:
             logger.warning("ffmpeg unavailable for audio extraction: %s", exc)
             return False
+
+    @staticmethod
+    def _resolve_ffmpeg_binary() -> str | None:
+        system_ffmpeg = shutil.which("ffmpeg")
+        if system_ffmpeg:
+            return system_ffmpeg
+        try:
+            import imageio_ffmpeg  # type: ignore
+
+            return imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return None
 
     @staticmethod
     def _read_waveform_stats(audio_file_path: str) -> dict[str, float | int] | None:

@@ -56,6 +56,8 @@ class EvaluationSummary(BaseModel):
     strengths: list[str]
     weaknesses: list[str]
     suggestions: list[str]
+    processing_option: str = "unknown"
+    processing_notes: list[str] = Field(default_factory=list)
 
 
 class DashboardSeriesPoint(BaseModel):

@@ -30,6 +30,9 @@ const finalScore = document.getElementById("finalScore");
 const videoRatingBand = document.getElementById("videoRatingBand");
 const videoRatingText = document.getElementById("videoRatingText");
 
+let selectedVideoFileName = "pitch.mp4";
+let selectedVideoDurationSec = 120;
+
 const fields = {
   title: document.getElementById("title"),
   transcript: document.getElementById("transcript"),
@@ -59,6 +62,9 @@ function listFromTextarea(value) {
 
 function toPayload() {
   const slidePoints = listFromTextarea(fields.slideText.value);
+  const inferredDuration = Number.isFinite(Number(pitchVideo.duration))
+    ? Math.max(5, Math.round(Number(pitchVideo.duration)))
+    : selectedVideoDurationSec;
 
   return {
     title: fields.title.value.trim() || "Untitled Pitch",
@@ -67,9 +73,9 @@ function toPayload() {
     presenter_profile: { experience: "Unknown" },
     slide_text: slidePoints,
     video: {
-      file_name: "pitch.mp4",
+      file_name: selectedVideoFileName,
       file_format: "mp4",
-      duration_sec: 120,
+      duration_sec: inferredDuration,
       transcript_text: fields.videoTranscript.value.trim(),
     },
     slides: slidePoints.map((point, idx) => ({
@@ -158,6 +164,8 @@ function renderSummary(summary) {
       <span>/ 10</span>
     </div>
     <p><strong>Language Detected:</strong> ${escapeHtml(summary.language_detected)}</p>
+    <p><strong>Processing Option:</strong> ${escapeHtml(summary.processing_option || "unknown")}</p>
+    <p><strong>Runtime:</strong> ${escapeHtml((summary.processing_notes || []).join(" | ") || "-")}</p>
     <span class="band-pill ${bandClass}">${escapeHtml(summary.investment_band)}</span>
   `;
 
@@ -401,10 +409,17 @@ function handleVideoSelect(event) {
   const videoName = event.target.value;
 
   if (!videoName) {
+    selectedVideoFileName = "pitch.mp4";
+    selectedVideoDurationSec = 120;
+    pitchVideo.removeAttribute("src");
+    pitchVideo.load();
     videoContainer.classList.add("hidden");
     hideVideoRatingPanel();
     return;
   }
+
+  selectedVideoFileName = videoName;
+  selectedVideoDurationSec = 120;
 
   // Set video source and show container
   pitchVideo.src = `/videos/${encodeURIComponent(videoName)}`;
@@ -429,6 +444,9 @@ videoSelect.addEventListener("change", handleVideoSelect);
 
 pitchVideo.addEventListener("loadedmetadata", () => {
   const duration = pitchVideo.duration;
+  if (Number.isFinite(duration)) {
+    selectedVideoDurationSec = Math.max(5, Math.round(duration));
+  }
   videoDuration.textContent = `Duration: ${formatDuration(duration)}`;
 });
 

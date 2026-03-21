@@ -1,6 +1,6 @@
 """Transcription abstraction with deterministic fallback behavior.
 
-Only OpenAI Whisper API is supported.
+Supports OpenAI Whisper API and optional faster-whisper local inference.
 """
 
 from __future__ import annotations
@@ -162,11 +162,122 @@ class OpenAIWhisperAPITranscriber(BaseLocalTranscriber):
             )
 
 
+class FasterWhisperLocalTranscriber(BaseLocalTranscriber):
+    def __init__(
+        self,
+        model_size: str = "small",
+        device: str = "cpu",
+        compute_type: str = "int8",
+        min_audio_quality: float = 0.35,
+    ):
+        super().__init__(backend_name="faster-whisper-local", min_audio_quality=min_audio_quality)
+        self.model_size = model_size.strip() or "small"
+        self.device = device.strip() or "cpu"
+        self.compute_type = compute_type.strip() or "int8"
+        self._model = None
+
+    def _get_model(self):
+        if self._model is not None:
+            return self._model
+        try:
+            from faster_whisper import WhisperModel  # type: ignore
+
+            self._model = WhisperModel(
+                self.model_size,
+                device=self.device,
+                compute_type=self.compute_type,
+            )
+            return self._model
+        except Exception as exc:
+            logger.warning("faster-whisper backend unavailable: %s", exc)
+            return None
+
+    def transcribe_audio_file(self, audio_file_path: str, language_hint: str = "") -> TranscriptionResult:
+        model = self._get_model()
+        if model is None:
+            return self._fallback(
+                fallback_text="",
+                confidence=0.0,
+                status="backend-unavailable",
+                reason="faster-whisper model not available",
+            )
+
+        audio_path = Path(audio_file_path)
+        if not audio_path.exists() or not audio_path.is_file():
+            return self._fallback(
+                fallback_text="",
+                confidence=0.0,
+                status="backend-unavailable",
+                reason=f"audio_file_missing={audio_file_path}",
+            )
+
+        try:
+            normalized_hint = language_hint.strip().lower()
+            language = normalized_hint if normalized_hint in {"en", "ta"} else None
+            segments, info = model.transcribe(str(audio_path), language=language)
+            text = " ".join((segment.text or "").strip() for segment in segments).strip()
+            avg_logprob = float(getattr(info, "avg_logprob", -1.0))
+            confidence = max(0.0, min(1.0, (avg_logprob + 5.0) / 5.0))
+            return TranscriptionResult(
+                text=text,
+                confidence=round(confidence, 2) if text else 0.0,
+                backend=self.backend_name,
+                status="ok" if text else "empty",
+                reason="",
+            )
+        except Exception as exc:
+            return TranscriptionResult(
+                text="",
+                confidence=0.0,
+                backend=self.backend_name,
+                status="error",
+                reason=str(exc),
+            )
+
+
 def build_local_transcriber(
     min_audio_quality: float = 0.35,
+    transcriber_backend: str = "auto",
     openai_api_key: str = "",
     openai_model_name: str = "whisper-1",
+    faster_whisper_model_size: str = "small",
+    faster_whisper_device: str = "cpu",
+    faster_whisper_compute_type: str = "int8",
 ) -> BaseLocalTranscriber:
+    backend = transcriber_backend.strip().lower()
+
+    if backend == "openai":
+        return OpenAIWhisperAPITranscriber(
+            api_key=openai_api_key,
+            model_name=openai_model_name,
+            min_audio_quality=min_audio_quality,
+        )
+
+    if backend == "faster-whisper":
+        return FasterWhisperLocalTranscriber(
+            model_size=faster_whisper_model_size,
+            device=faster_whisper_device,
+            compute_type=faster_whisper_compute_type,
+            min_audio_quality=min_audio_quality,
+        )
+
+    if openai_api_key.strip():
+        return OpenAIWhisperAPITranscriber(
+            api_key=openai_api_key,
+            model_name=openai_model_name,
+            min_audio_quality=min_audio_quality,
+        )
+
+    # Prefer local faster-whisper when no OpenAI key is provided.
+    fw_transcriber = FasterWhisperLocalTranscriber(
+        model_size=faster_whisper_model_size,
+        device=faster_whisper_device,
+        compute_type=faster_whisper_compute_type,
+        min_audio_quality=min_audio_quality,
+    )
+    if fw_transcriber._get_model() is not None:
+        return fw_transcriber
+
     return OpenAIWhisperAPITranscriber(
         api_key=openai_api_key,
         model_name=openai_model_name,

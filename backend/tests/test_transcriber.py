@@ -8,6 +8,7 @@ from app.services.transcriber import build_local_transcriber
 def test_transcriber_falls_back_when_audio_file_missing() -> None:
     transcriber = build_local_transcriber(
         min_audio_quality=0.35,
+        transcriber_backend="openai",
         openai_api_key="",
         openai_model_name="whisper-1",
     )
@@ -72,6 +73,7 @@ def test_preprocessing_uses_local_transcriber_with_fallback() -> None:
 def test_openai_transcriber_backend_selection_and_fallback() -> None:
     transcriber = build_local_transcriber(
         min_audio_quality=0.35,
+        transcriber_backend="openai",
         openai_api_key="",
         openai_model_name="whisper-1",
     )
@@ -103,3 +105,14 @@ def test_openai_transcriber_backend_selection_and_fallback() -> None:
     assert transcriber.backend_name == "openai-whisper-api"
     assert result.text == "fallback transcript"
     assert result.status == "fallback-low-quality"
+
+
+def test_auto_backend_selection_returns_supported_transcriber() -> None:
+    transcriber = build_local_transcriber(
+        min_audio_quality=0.35,
+        transcriber_backend="auto",
+        openai_api_key="",
+        openai_model_name="whisper-1",
+    )
+
+    assert transcriber.backend_name in {"openai-whisper-api", "faster-whisper-local"}

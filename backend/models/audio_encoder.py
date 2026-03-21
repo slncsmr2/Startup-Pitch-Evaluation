@@ -24,6 +24,7 @@ class AudioEncoder:
         punctuation_count = sum(1 for c in chunk_text if c in ",;:!?")
 
         duration_sec = float(getattr(audio_metadata, "duration_sec", 5.0))
+        extraction_status = str(getattr(audio_metadata, "extraction_status", "skipped"))
         silence_ratio = float(getattr(audio_metadata, "silence_ratio", 0.1))
         clipping_ratio = float(getattr(audio_metadata, "clipping_ratio", 0.0))
         quality_score = float(getattr(audio_metadata, "audio_quality_score", 0.7))
@@ -32,16 +33,23 @@ class AudioEncoder:
         energy_variation = float(getattr(audio_metadata, "energy_variation", 0.0))
 
         words_per_second = len(words) / max(1.0, duration_sec)
-        pace = (10.0 - abs(2.4 - words_per_second) * 3.0) * (0.55 + speech_density * 0.45)
-        prosody = (
-            4.0
-            + min(punctuation_count, 8) * 0.25
-            + quality_score * 1.8
-            + pitch_variation * 2.2
-            + energy_variation * 1.6
-            + speech_density * 1.2
-            - (silence_ratio * 1.8 + clipping_ratio * 2.2)
-        )
+        missing_audio_signal = extraction_status in {"missing-video", "backend-unavailable", "skipped"}
+
+        if missing_audio_signal:
+            # Keep ratings neutral when runtime dependencies/media are unavailable.
+            pace = max(5.2, 6.2 - abs(2.4 - words_per_second) * 1.3)
+            prosody = 5.8 + min(punctuation_count, 8) * 0.2
+        else:
+            pace = (10.0 - abs(2.4 - words_per_second) * 3.0) * (0.55 + speech_density * 0.45)
+            prosody = (
+                4.0
+                + min(punctuation_count, 8) * 0.25
+                + quality_score * 1.8
+                + pitch_variation * 2.2
+                + energy_variation * 1.6
+                + speech_density * 1.2
+                - (silence_ratio * 1.8 + clipping_ratio * 2.2)
+            )
 
         return {
             "embedding": self._hash_to_vector(
