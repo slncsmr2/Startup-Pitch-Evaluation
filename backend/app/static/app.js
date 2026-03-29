@@ -31,6 +31,7 @@ const videoRatingText = document.getElementById("videoRatingText");
 
 let selectedVideoFileName = "pitch.mp4";
 let selectedVideoDurationSec = 120;
+let latestRating = null;
 
 const fields = {
   title: document.getElementById("title"),
@@ -280,6 +281,13 @@ async function evaluatePitch(payload) {
     renderChunks(result.chunk_reports || []);
     rawJson.textContent = JSON.stringify(result, null, 2);
 
+    const overall = Number(result.summary?.overall_score || 0);
+    latestRating = {
+      score: overall.toFixed(2),
+      band: result.summary?.investment_band || "-",
+    };
+    showLatestRatingPanel();
+
     evaluationPlaceholder.classList.add("hidden");
     evaluationResults.classList.remove("hidden");
     statusText.textContent = "Evaluation complete.";
@@ -298,6 +306,8 @@ function clearForm() {
   Object.values(fields).forEach((field) => {
     field.value = "";
   });
+  latestRating = null;
+  hideVideoRatingPanel();
   renderPitchPreview(toPayload());
   statusText.textContent = "Cleared.";
 }
@@ -328,7 +338,7 @@ clearBtn.addEventListener("click", () => {
 Object.values(fields)
   .filter(Boolean)
   .forEach((field) => {
-  field.addEventListener("input", () => renderPitchPreview(toPayload()));
+    field.addEventListener("input", () => renderPitchPreview(toPayload()));
   });
 
 // Video player functions
@@ -375,17 +385,19 @@ function showVideoRatingPanel(score, band) {
   videoRatingPanel.classList.remove("hidden");
 }
 
+function showLatestRatingPanel() {
+  if (!latestRating) {
+    return;
+  }
+  showVideoRatingPanel(latestRating.score, latestRating.band);
+}
+
 function handleVideoEnded() {
   // Buffer time of 2 seconds before showing rating
   const bufferTimeMs = 2000;
 
   setTimeout(() => {
-    // Check if we have evaluation results
-    if (!evaluationResults.classList.contains("hidden")) {
-      const score = overallKpi.textContent.split(" ")[0];
-      const band = bandKpi.textContent;
-      showVideoRatingPanel(score, band);
-    }
+    showLatestRatingPanel();
   }, bufferTimeMs);
 }
 
