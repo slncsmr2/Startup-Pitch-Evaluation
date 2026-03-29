@@ -1,5 +1,4 @@
 const form = document.getElementById("pitchForm");
-const loadSampleBtn = document.getElementById("loadSampleBtn");
 const clearBtn = document.getElementById("clearBtn");
 const evaluateBtn = document.getElementById("evaluateBtn");
 const statusText = document.getElementById("statusText");
@@ -35,8 +34,6 @@ let selectedVideoDurationSec = 120;
 
 const fields = {
   title: document.getElementById("title"),
-  transcript: document.getElementById("transcript"),
-  videoTranscript: document.getElementById("videoTranscript"),
   slideText: document.getElementById("slideText"),
   founderName: document.getElementById("founderName"),
   startupName: document.getElementById("startupName"),
@@ -68,7 +65,7 @@ function toPayload() {
 
   return {
     title: fields.title.value.trim() || "Untitled Pitch",
-    transcript: fields.transcript.value.trim(),
+    transcript: "",
     language_hint: "en-ta",
     presenter_profile: { experience: "Unknown" },
     slide_text: slidePoints,
@@ -76,7 +73,7 @@ function toPayload() {
       file_name: selectedVideoFileName,
       file_format: "mp4",
       duration_sec: inferredDuration,
-      transcript_text: fields.videoTranscript.value.trim(),
+      transcript_text: "",
     },
     slides: slidePoints.map((point, idx) => ({
       title: `Slide ${idx + 1}`,
@@ -93,17 +90,11 @@ function toPayload() {
 }
 
 function renderPitchPreview(payload) {
-  const transcriptSource = payload.transcript || payload.video.transcript_text;
-  const transcriptSample = transcriptSource
-    ? escapeHtml(transcriptSource.slice(0, 220))
-    : "No transcript provided.";
-
   pitchPreview.innerHTML = `
     <h3>${escapeHtml(payload.title)}</h3>
     <p><strong>Founder:</strong> ${escapeHtml(payload.user_details.founder_name || "N/A")}</p>
     <p><strong>Sector:</strong> ${escapeHtml(payload.user_details.sector || "N/A")} | <strong>Stage:</strong> ${escapeHtml(payload.user_details.stage || "N/A")}</p>
     <p><strong>Slides:</strong> ${payload.slides.length}</p>
-    <p class="small">${transcriptSample}</p>
   `;
 }
 
@@ -313,10 +304,6 @@ function clearForm() {
 
 function fillSample() {
   fields.title.value = "RetailPulse";
-  fields.transcript.value =
-    "We help neighborhood stores predict demand, reduce stock-outs, and automate reorder planning. Our bilingual AI coach helps store owners take action quickly.";
-  fields.videoTranscript.value =
-    "In our pilot, 12 stores reduced dead inventory by 18 percent within 8 weeks and improved recurring purchases.";
   fields.slideText.value =
     "Problem: stock mismatch creates losses\nSolution: demand forecasting with bilingual AI guidance\nTraction: 12 stores, 18% inventory efficiency gain\nGo-to-market: channel partners and distributor referrals";
   fields.founderName.value = "A. Founder";
@@ -334,18 +321,15 @@ form.addEventListener("submit", async (event) => {
   await evaluatePitch(payload);
 });
 
-loadSampleBtn.addEventListener("click", () => {
-  fillSample();
-  statusText.textContent = "Sample loaded.";
-});
-
 clearBtn.addEventListener("click", () => {
   clearForm();
 });
 
-Object.values(fields).forEach((field) => {
+Object.values(fields)
+  .filter(Boolean)
+  .forEach((field) => {
   field.addEventListener("input", () => renderPitchPreview(toPayload()));
-});
+  });
 
 // Video player functions
 async function loadVideoList() {
