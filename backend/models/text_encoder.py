@@ -1,12 +1,99 @@
 import hashlib
+import logging
 import re
+
+import numpy as np
+
+
+logger = logging.getLogger(__name__)
 
 
 class TextEncoder:
     """Deterministic text encoder that mimics trainable inference behavior."""
 
-    def __init__(self, embedding_dim: int = 24) -> None:
+    def __init__(
+        self,
+        embedding_dim: int = 24,
+        use_heuristic: bool = True,
+        model_name: str = "all-MiniLM-L6-v2",
+        hidden_dim: int = 128,
+    ) -> None:
         self.embedding_dim = embedding_dim
+        self.use_heuristic = use_heuristic
+        self.model_name = model_name
+        self.hidden_dim = hidden_dim
+        self._nn_model = None
+        self._nn_input_dim = 384
+        self._w1: np.ndarray | None = None
+        self._b1: np.ndarray | None = None
+        self._w2: np.ndarray | None = None
+        self._b2: np.ndarray | None = None
+
+        if not self.use_heuristic:
+            self._initialize_neural_backend()
+
+    def _initialize_neural_backend(self) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+        except Exception as exc:
+            logger.warning(
+                "Neural text encoder disabled (sentence-transformers unavailable): %s",
+                exc,
+            )
+            return
+
+        try:
+            self._nn_model = SentenceTransformer(self.model_name)
+            self._nn_input_dim = int(self._nn_model.get_sentence_embedding_dimension())
+            self.embedding_dim = self._nn_input_dim
+            self._initialize_mlp_weights()
+        except Exception as exc:
+            logger.warning(
+                "Neural text encoder disabled (model load failed: %s): %s",
+                self.model_name,
+                exc,
+            )
+            self._nn_model = None
+
+    def _initialize_mlp_weights(self) -> None:
+        rng = np.random.default_rng(7)
+        in_dim = self._nn_input_dim
+        hid_dim = self.hidden_dim
+        out_dim = 6
+
+        self._w1 = rng.normal(0.0, 1.0 / np.sqrt(in_dim), size=(in_dim, hid_dim)).astype(np.float32)
+        self._b1 = np.zeros((hid_dim,), dtype=np.float32)
+        self._w2 = rng.normal(0.0, 1.0 / np.sqrt(hid_dim), size=(hid_dim, out_dim)).astype(np.float32)
+
+        score_priors = np.array([5.2, 5.1, 5.4, 4.9, 4.8, 4.9], dtype=np.float32) / 10.0
+        score_priors = np.clip(score_priors, 1e-4, 1 - 1e-4)
+        self._b2 = np.log(score_priors / (1.0 - score_priors)).astype(np.float32)
+
+    def _mlp_predict(self, embedding: list[float]) -> dict[str, float]:
+        if any(x is None for x in [self._w1, self._b1, self._w2, self._b2]):
+            raise RuntimeError("Neural head is not initialized")
+
+        x = np.array(embedding, dtype=np.float32)
+        h = np.maximum((x @ self._w1) + self._b1, 0.0)
+        y = (h @ self._w2) + self._b2
+        probs = 1.0 / (1.0 + np.exp(-y))
+        scaled = np.clip(probs * 10.0, 0.0, 10.0)
+
+        return {
+            "problem_clarity": float(scaled[0]),
+            "market_opportunity": float(scaled[1]),
+            "solution_uniqueness": float(scaled[2]),
+            "traction_evidence": float(scaled[3]),
+            "business_model_strength": float(scaled[4]),
+            "team_readiness": float(scaled[5]),
+        }
+
+    def _semantic_embedding(self, normalized_text: str) -> list[float]:
+        if self._nn_model is None:
+            return self._hash_to_vector(f"text::{normalized_text}")
+        text = normalized_text if normalized_text else " "
+        encoded = self._nn_model.encode(text, normalize_embeddings=True)
+        return np.asarray(encoded, dtype=np.float32).tolist()
 
     def _hash_to_vector(self, value: str) -> list[float]:
         digest = hashlib.sha256(value.encode("utf-8")).digest()
@@ -103,11 +190,9 @@ class TextEncoder:
     def _clamp_10(value: float) -> float:
         return max(0.0, min(10.0, value))
 
-    def infer(self, chunk_text: str, language_hint: str, slide_context: str) -> dict:
-        normalized_text = self._normalize(chunk_text)
+    def _heuristic_scores(self, normalized_text: str, language: str) -> dict[str, float]:
         words = normalized_text.split()
         unique_ratio = len(set(words)) / max(1, len(words))
-        language = self._detect_language(normalized_text, language_hint)
         lowered = normalized_text.lower()
 
         problem_signal = 2.0 if "problem" in lowered else 0.0
@@ -118,12 +203,34 @@ class TextEncoder:
         language_bonus = 1.0 if language == "ta-en" else 0.4
 
         return {
-            "embedding": self._hash_to_vector(f"text::{normalized_text}::{slide_context}"),
-            "language_detected": language,
             "problem_clarity": self._clamp_10(4.0 + problem_signal + unique_ratio * 1.5),
             "market_opportunity": self._clamp_10(4.0 + market_signal + unique_ratio * 1.3),
             "solution_uniqueness": self._clamp_10(4.5 + unique_ratio * 3.0),
             "traction_evidence": self._clamp_10(3.5 + traction_signal + min(len(words), 40) * 0.08),
             "business_model_strength": self._clamp_10(3.5 + business_model_signal + min(len(words), 30) * 0.07),
             "team_readiness": self._clamp_10(3.0 + team_signal + language_bonus),
+        }
+
+    def infer(self, chunk_text: str, language_hint: str, slide_context: str) -> dict:
+        normalized_text = self._normalize(chunk_text)
+        language = self._detect_language(normalized_text, language_hint)
+        heuristic_targets = self._heuristic_scores(normalized_text, language)
+
+        if self.use_heuristic or self._nn_model is None:
+            output_scores = heuristic_targets
+            embedding = self._hash_to_vector(f"text::{normalized_text}::{slide_context}")
+        else:
+            embedding = self._semantic_embedding(normalized_text)
+            output_scores = self._mlp_predict(embedding)
+
+        return {
+            "embedding": embedding,
+            "language_detected": language,
+            "problem_clarity": output_scores["problem_clarity"],
+            "market_opportunity": output_scores["market_opportunity"],
+            "solution_uniqueness": output_scores["solution_uniqueness"],
+            "traction_evidence": output_scores["traction_evidence"],
+            "business_model_strength": output_scores["business_model_strength"],
+            "team_readiness": output_scores["team_readiness"],
+            "heuristic_targets": heuristic_targets,
         }

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     faster_whisper_compute_type: str = "int8"
     media_lookup_dir: str = "outputs/batch_input"
 
+    # Neural Network Config
+    nn_checkpoint_path: str = ""
+
     model_config = SettingsConfigDict(
         env_file=(str(_PROJECT_ROOT / ".env"), str(_BACKEND_ROOT / ".env")),
         env_prefix="SPE_",
