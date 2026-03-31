@@ -10,6 +10,7 @@ class TextFeatureExtractor:
         self.model = TextEncoder(
             embedding_dim=24 if use_heuristic else 384,
             use_heuristic=use_heuristic,
+            model_name=settings.nn_text_encoder,
         )
 
     def extract(self, chunk_text: str, language_hint: str, slide_context: str) -> dict:
@@ -22,6 +23,7 @@ class VisualFeatureExtractor:
         self.model = VisualEncoder(
             embedding_dim=24 if use_heuristic else 256,
             use_heuristic=use_heuristic,
+            backbone_name=settings.nn_visual_backbone,
         )
 
     def extract(self, slide_context: str, chunk_id: int, user_stage: str, video_metadata: object | None = None) -> dict:
@@ -34,6 +36,7 @@ class AudioFeatureExtractor:
         self.model = AudioEncoder(
             embedding_dim=24 if use_heuristic else 128,
             use_heuristic=use_heuristic,
+            feature_type=settings.nn_audio_features,
         )
 
     def extract(self, chunk_text: str, audio_metadata: object | None = None) -> dict:

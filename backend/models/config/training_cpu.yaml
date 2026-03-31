@@ -1,10 +1,19 @@
-# Phase-5 CPU training defaults
+# Phase-6 CPU training defaults (Option A data strategy)
+data_strategy: option_a
 device: cpu
-epochs: 8
-learning_rate: 0.03
+epochs: 30
+batch_size: 16
+learning_rate: 0.0001
+weight_decay: 0.01
+warm_restart_t0: 10
+warm_restart_t_mult: 2
+early_stopping_patience: 10
+classification_loss_weight: 1.0
+spearman_loss_weight: 0.05
+mixed_precision: false
 train_samples: 120
 val_samples: 48
 test_samples: 48
 seed: 7
 checkpoint_dir: models/checkpoints
-checkpoint_name: training_cpu_checkpoint.json
+checkpoint_name: phase6_cpu_nn_model.pt

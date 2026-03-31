@@ -31,7 +31,11 @@ class StartupPitchPipeline:
         logger.info(
             "Pipeline initialized | "
             f"use_heuristic_pipeline={settings.use_heuristic_pipeline} | "
-            f"use_local_transcriber={settings.use_local_transcriber}"
+            f"use_local_transcriber={settings.use_local_transcriber} | "
+            f"nn_checkpoint_path={settings.nn_checkpoint_path} | "
+            f"nn_text_encoder={settings.nn_text_encoder} | "
+            f"nn_visual_backbone={settings.nn_visual_backbone} | "
+            f"nn_audio_features={settings.nn_audio_features}"
         )
 
     @staticmethod

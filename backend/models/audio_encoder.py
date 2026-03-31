@@ -14,10 +14,12 @@ class AudioEncoder:
         embedding_dim: int = 24,
         use_heuristic: bool = True,
         sample_rate: int = 16000,
+        feature_type: str = "mfcc",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.use_heuristic = use_heuristic
         self.sample_rate = sample_rate
+        self.feature_type = feature_type.strip().lower()
 
         self._torch = None
         self._torchaudio = None
@@ -29,6 +31,10 @@ class AudioEncoder:
             self._initialize_neural_backend()
 
     def _initialize_neural_backend(self) -> None:
+        if self.feature_type != "mfcc":
+            logger.warning("Unsupported audio feature type '%s'; defaulting to mfcc", self.feature_type)
+            self.feature_type = "mfcc"
+
         try:
             import torch  # type: ignore
             import torchaudio  # type: ignore

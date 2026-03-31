@@ -13,9 +13,11 @@ class VisualEncoder:
         self,
         embedding_dim: int = 24,
         use_heuristic: bool = True,
+        backbone_name: str = "mobilenet_v3_small",
     ) -> None:
         self.embedding_dim = embedding_dim
         self.use_heuristic = use_heuristic
+        self.backbone_name = backbone_name.strip().lower()
 
         self._torch = None
         self._torchvision = None
@@ -29,6 +31,10 @@ class VisualEncoder:
             self._initialize_neural_backend()
 
     def _initialize_neural_backend(self) -> None:
+        if self.backbone_name != "mobilenet_v3_small":
+            logger.warning("Unsupported visual backbone '%s'; defaulting to mobilenet_v3_small", self.backbone_name)
+            self.backbone_name = "mobilenet_v3_small"
+
         try:
             import torch  # type: ignore
             import torchvision  # type: ignore

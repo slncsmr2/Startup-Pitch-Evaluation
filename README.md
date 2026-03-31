@@ -9,6 +9,8 @@ Multimodal startup pitch evaluation backend with a FastAPI API, shared CLI infer
 - 5-second timeline chunking with synchronized text/audio/visual metadata
 - Deterministic fallback behavior when AV dependencies or media files are unavailable
 - Optional local faster-whisper and OpenAI Whisper API transcription paths
+- Neural-ready extraction/fusion/scoring path controlled by `SPE_USE_HEURISTIC_PIPELINE`
+- Phase 6 training pipeline with Option A JSONL dataset support and `.pt` checkpoint output
 - Static frontend served by the API root route
 - Training, evaluation, and runtime benchmark scripts
 
@@ -125,7 +127,7 @@ python scripts/train.py --config models/config/training_cpu.yaml
 Evaluate checkpoint:
 
 ```powershell
-python scripts/evaluate.py --config models/config/training_cpu.yaml --checkpoint models/checkpoints/training_cpu_checkpoint.json
+python scripts/evaluate.py --config models/config/training_cpu.yaml --checkpoint models/checkpoints/phase6_cpu_nn_model.pt
 ```
 
 Benchmark runtime:
@@ -148,6 +150,32 @@ SPE_ENABLE_AUDIO_EXTRACTION=true
 SPE_CHUNK_WINDOW_SECONDS=5
 SPE_MEDIA_LOOKUP_DIR=outputs/batch_input
 ```
+
+Neural pipeline flags (Phase 7):
+
+```text
+SPE_USE_HEURISTIC_PIPELINE=false
+SPE_NN_CHECKPOINT_PATH=models/checkpoints/nn_model.pt
+SPE_NN_TEXT_ENCODER=all-MiniLM-L6-v2
+SPE_NN_VISUAL_BACKBONE=mobilenet_v3_small
+SPE_NN_AUDIO_FEATURES=mfcc
+```
+
+### Switching between heuristic and neural paths
+
+- Keep `SPE_USE_HEURISTIC_PIPELINE=true` for deterministic heuristic scoring fallback.
+- Set `SPE_USE_HEURISTIC_PIPELINE=false` to enable the neural extraction, fusion, and scoring path.
+- In neural mode, ensure `SPE_NN_CHECKPOINT_PATH` points to a valid `.pt` checkpoint file.
+
+## Training data (Phase 6, Option A)
+
+The recommended training data strategy is Option A: LLM-labeled rubric scores stored as JSONL.
+
+- Put split files in `backend/datasets/splits/train.jsonl`, `backend/datasets/splits/val.jsonl`, and `backend/datasets/splits/test.jsonl`.
+- Use records with `video_id`, `transcript`, `slide_text`, `scores` (10 values), and optional `investment_band`.
+- Full schema and rules are documented in `backend/datasets/splits/README.md`.
+
+When split files are absent, the trainer falls back to synthetic samples so local smoke tests can still run.
 
 Transcriber selection:
 

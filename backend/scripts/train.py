@@ -15,7 +15,7 @@ DEFAULT_CONFIG = Path("models/config/training_cpu.yaml")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Train phase-5 multimodal scoring model.")
+    parser = argparse.ArgumentParser(description="Train phase-6 multimodal neural scoring model.")
     parser.add_argument(
         "--config",
         type=str,

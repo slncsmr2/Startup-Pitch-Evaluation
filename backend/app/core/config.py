@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     faster_whisper_compute_type: str = "int8"
     media_lookup_dir: str = "outputs/batch_input"
 
-    # Neural Network Config
-    nn_checkpoint_path: str = ""
+    # Neural Network Config (Phase 7)
+    nn_checkpoint_path: str = "models/checkpoints/nn_model.pt"
+    nn_text_encoder: str = "all-MiniLM-L6-v2"
+    nn_visual_backbone: str = "mobilenet_v3_small"
+    nn_audio_features: str = "mfcc"
 
     model_config = SettingsConfigDict(
         env_file=(str(_PROJECT_ROOT / ".env"), str(_BACKEND_ROOT / ".env")),
