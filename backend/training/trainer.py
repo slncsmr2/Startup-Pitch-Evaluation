@@ -249,6 +249,28 @@ def _checkpoint_path(config: dict) -> Path:
     return checkpoint_dir / str(config["checkpoint_name"])
 
 
+def _val_split_file() -> Path:
+    backend_root = Path(__file__).resolve().parents[1]
+    return backend_root / "datasets" / "splits" / "val.jsonl"
+
+
+def _split_train_val_from_train_only(torch, train_samples: list[TrainingSample], seed: int) -> tuple[list[TrainingSample], list[TrainingSample]]:
+    if len(train_samples) < 2:
+        raise ValueError("Need at least 2 train samples to derive validation split when val.jsonl is missing")
+
+    # Keep at least one item in each split and use a stable random partition.
+    val_count = max(1, int(round(len(train_samples) * 0.15)))
+    val_count = min(val_count, len(train_samples) - 1)
+
+    generator = torch.Generator().manual_seed(seed + 1234)
+    shuffled_idx = torch.randperm(len(train_samples), generator=generator).tolist()
+    val_idx = set(shuffled_idx[:val_count])
+
+    derived_train = [sample for idx, sample in enumerate(train_samples) if idx not in val_idx]
+    derived_val = [sample for idx, sample in enumerate(train_samples) if idx in val_idx]
+    return derived_train, derived_val
+
+
 def save_checkpoint(model, config: dict, history: list[dict], best_epoch: int) -> Path:
     torch, _, _, _, _ = _import_torch()
     path = _checkpoint_path(config)
@@ -287,11 +309,22 @@ def train_from_config(config_path: str) -> dict:
         synthetic_count=int(config["train_samples"]),
         seed=int(config["seed"]),
     )
-    val_samples = load_split_samples(
-        "val",
-        synthetic_count=int(config["val_samples"]),
-        seed=int(config["seed"]),
-    )
+
+    val_source = "file"
+    val_file = _val_split_file()
+    if val_file.exists() and val_file.stat().st_size > 0:
+        val_samples = load_split_samples(
+            "val",
+            synthetic_count=int(config["val_samples"]),
+            seed=int(config["seed"]),
+        )
+    else:
+        train_samples, val_samples = _split_train_val_from_train_only(
+            torch,
+            train_samples,
+            seed=int(config["seed"]),
+        )
+        val_source = "derived_from_train"
 
     train_tensors = _tensorize_samples(torch, train_samples)
     val_tensors = _tensorize_samples(torch, val_samples)
@@ -392,6 +425,7 @@ def train_from_config(config_path: str) -> dict:
     return {
         "checkpoint_path": str(checkpoint),
         "device": str(device),
+        "val_source": val_source,
         "epochs_ran": len(history),
         "best_epoch": best_epoch,
         "best_val_mae": round(best_mae, 4) if best_mae < math.inf else 0.0,

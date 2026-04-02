@@ -1,1 +1,8 @@
-python.exe prepare_videos_with_whisper.py --input-dir backend/outputs/batch_input --model-size small --device cuda --compute-type float16 --debug-runtime --strict-gpu
+
+python.exe prepare_videos_with_whisper.py --input-dir backend/Input-Output/Training --model-size small --device cuda --compute-type float16 --debug-runtime --strict-gpu
+
+python.exe prepare_videos_with_whisper.py --input-dir backend/Input-Output/Testing --model-size small --device cuda --compute-type float16 --debug-runtime --strict-gpu
+
+python scripts/train.py --config models/config/training_gpu.yaml
+
+Set-Location backend; ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
