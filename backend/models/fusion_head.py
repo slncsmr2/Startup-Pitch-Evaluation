@@ -14,6 +14,7 @@ class FusionHead:
         
         self._torch = None
         self._attention_layer = None
+        self._device = "cpu"
         
         if not self.use_heuristic:
             self._initialize_neural_backend()
@@ -23,6 +24,9 @@ class FusionHead:
             import torch
             import torch.nn as nn
             self._torch = torch
+            requested = settings.nn_device.strip().lower()
+            use_cuda = torch.cuda.is_available() and requested in {"auto", "cuda", "gpu"}
+            self._device = "cuda" if use_cuda else "cpu"
             
             class CrossModalAttentionLayer(nn.Module):
                 def __init__(self, text_dim=384, visual_dim=256, audio_dim=128, common_dim=256):
@@ -56,6 +60,7 @@ class FusionHead:
             self._attention_layer = CrossModalAttentionLayer(
                 self.text_dim, self.visual_dim, self.audio_dim, self.common_dim
             )
+            self._attention_layer.to(self._device)
             self._attention_layer.eval()
         except ImportError:
             logger.warning("Neural fusion disabled. Enable by installing torch.")
@@ -91,9 +96,9 @@ class FusionHead:
             }
         
         with self._torch.no_grad():
-            t_tensor = self._torch.tensor(text_embedding, dtype=self._torch.float32).unsqueeze(0)
-            v_tensor = self._torch.tensor(visual_embedding, dtype=self._torch.float32).unsqueeze(0)
-            a_tensor = self._torch.tensor(audio_embedding, dtype=self._torch.float32).unsqueeze(0)
+            t_tensor = self._torch.tensor(text_embedding, dtype=self._torch.float32, device=self._device).unsqueeze(0)
+            v_tensor = self._torch.tensor(visual_embedding, dtype=self._torch.float32, device=self._device).unsqueeze(0)
+            a_tensor = self._torch.tensor(audio_embedding, dtype=self._torch.float32, device=self._device).unsqueeze(0)
 
             fused, attn_weights = self._attention_layer(t_tensor, v_tensor, a_tensor)
 

@@ -1,6 +1,7 @@
 import hashlib
 import logging
 from pathlib import Path
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class AudioEncoder:
         self._mfcc_transform = None
         self._cnn = None
         self._scoring_mlp = None
+        self._device = "cpu"
 
         if not self.use_heuristic:
             self._initialize_neural_backend()
@@ -44,6 +46,9 @@ class AudioEncoder:
 
         self._torch = torch
         self._torchaudio = torchaudio
+        requested = settings.nn_device.strip().lower()
+        use_cuda = torch.cuda.is_available() and requested in {"auto", "cuda", "gpu"}
+        self._device = "cuda" if use_cuda else "cpu"
         self.embedding_dim = 128
 
         self._mfcc_transform = torchaudio.transforms.MFCC(
@@ -74,6 +79,9 @@ class AudioEncoder:
         )
 
         torch.manual_seed(11)
+        self._mfcc_transform.to(self._device)
+        self._cnn.to(self._device)
+        self._scoring_mlp.to(self._device)
         self._cnn.eval()
         self._scoring_mlp.eval()
 
@@ -105,7 +113,7 @@ class AudioEncoder:
                     orig_freq=int(sr),
                     new_freq=self.sample_rate,
                 )
-            return waveform
+            return waveform.to(self._device)
         except Exception as exc:
             logger.warning("Neural audio waveform load failed for %s: %s", audio_path, exc)
             return None

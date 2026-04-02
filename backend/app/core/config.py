@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     nn_text_encoder: str = "all-MiniLM-L6-v2"
     nn_visual_backbone: str = "mobilenet_v3_small"
     nn_audio_features: str = "mfcc"
+    nn_device: str = "auto"
 
     model_config = SettingsConfigDict(
         env_file=(str(_PROJECT_ROOT / ".env"), str(_BACKEND_ROOT / ".env")),

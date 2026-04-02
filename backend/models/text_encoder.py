@@ -3,6 +3,7 @@ import logging
 import re
 
 import numpy as np
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class TextEncoder:
         self.hidden_dim = hidden_dim
         self._nn_model = None
         self._nn_input_dim = 384
+        self._nn_device = "cpu"
         self._w1: np.ndarray | None = None
         self._b1: np.ndarray | None = None
         self._w2: np.ndarray | None = None
@@ -34,6 +36,15 @@ class TextEncoder:
 
     def _initialize_neural_backend(self) -> None:
         try:
+            import torch  # type: ignore
+
+            requested = settings.nn_device.strip().lower()
+            use_cuda = torch.cuda.is_available() and requested in {"auto", "cuda", "gpu"}
+            self._nn_device = "cuda" if use_cuda else "cpu"
+        except Exception:
+            self._nn_device = "cpu"
+
+        try:
             from sentence_transformers import SentenceTransformer  # type: ignore
         except Exception as exc:
             logger.warning(
@@ -43,7 +54,7 @@ class TextEncoder:
             return
 
         try:
-            self._nn_model = SentenceTransformer(self.model_name)
+            self._nn_model = SentenceTransformer(self.model_name, device=self._nn_device)
             self._nn_input_dim = int(self._nn_model.get_sentence_embedding_dimension())
             self.embedding_dim = self._nn_input_dim
             self._initialize_mlp_weights()

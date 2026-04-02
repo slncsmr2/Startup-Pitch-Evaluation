@@ -1,6 +1,7 @@
 import hashlib
 import logging
 from pathlib import Path
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class VisualEncoder:
         self._preprocess = None
         self._projection = None
         self._scoring_mlp = None
+        self._device = "cpu"
 
         if not self.use_heuristic:
             self._initialize_neural_backend()
@@ -45,6 +47,9 @@ class VisualEncoder:
 
         self._torch = torch
         self._torchvision = torchvision
+        requested = settings.nn_device.strip().lower()
+        use_cuda = torch.cuda.is_available() and requested in {"auto", "cuda", "gpu"}
+        self._device = "cuda" if use_cuda else "cpu"
 
         weights = None
         try:
@@ -67,6 +72,9 @@ class VisualEncoder:
 
         torch.manual_seed(17)
         self.embedding_dim = 256
+        self._backbone.to(self._device)
+        self._projection.to(self._device)
+        self._scoring_mlp.to(self._device)
         self._backbone.eval()
         self._projection.eval()
         self._scoring_mlp.eval()
@@ -119,13 +127,13 @@ class VisualEncoder:
 
     def _neural_infer(self, frame_tensors: list, aux_features: list[float]) -> dict:
         with self._torch.no_grad():
-            batch = self._torch.stack(frame_tensors, dim=0)
+            batch = self._torch.stack(frame_tensors, dim=0).to(self._device)
             features = self._backbone(batch)
             pooled = self._torch.nn.functional.adaptive_avg_pool2d(features, output_size=1).flatten(1)
             chunk_feature = pooled.mean(dim=0)
 
             embedding = self._projection(chunk_feature)
-            aux = self._torch.tensor(aux_features, dtype=self._torch.float32)
+            aux = self._torch.tensor(aux_features, dtype=self._torch.float32, device=self._device)
             scoring_input = self._torch.cat([embedding, aux], dim=0)
             scores = self._scoring_mlp(scoring_input.unsqueeze(0)).squeeze(0)
 

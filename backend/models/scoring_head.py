@@ -11,6 +11,7 @@ class ScoringHead:
         self.use_heuristic = settings.use_heuristic_pipeline
         self.fused_dim = fused_dim
         self._torch = None
+        self._device = "cpu"
         
         self.metric_names_text = [
             "Problem Clarity",
@@ -36,6 +37,9 @@ class ScoringHead:
             import torch
             import torch.nn as nn
             self._torch = torch
+            requested = settings.nn_device.strip().lower()
+            use_cuda = torch.cuda.is_available() and requested in {"auto", "cuda", "gpu"}
+            self._device = "cuda" if use_cuda else "cpu"
             
             class InternalScoringHead(nn.Module):
                 def __init__(self, fused_dim=256):
@@ -61,11 +65,12 @@ class ScoringHead:
                     return metrics_out, overall_out
 
             self._internal_model = InternalScoringHead(self.fused_dim)
+            self._internal_model.to(self._device)
             self._internal_model.eval()
 
             if settings.nn_checkpoint_path and os.path.exists(settings.nn_checkpoint_path):
                 try:
-                    state_dict = torch.load(settings.nn_checkpoint_path, map_location="cpu")
+                    state_dict = torch.load(settings.nn_checkpoint_path, map_location=self._device)
                     if "scoring_head" in state_dict:
                         self._internal_model.load_state_dict(state_dict["scoring_head"])
                     else:
@@ -118,7 +123,7 @@ class ScoringHead:
             }
         else:
             with self._torch.no_grad():
-                f_tensor = self._torch.tensor(fused["vector"], dtype=self._torch.float32).unsqueeze(0)
+                f_tensor = self._torch.tensor(fused["vector"], dtype=self._torch.float32, device=self._device).unsqueeze(0)
                 metrics_out, overall_out = self._internal_model(f_tensor)
                 
                 m_vals = metrics_out.squeeze(0).tolist()

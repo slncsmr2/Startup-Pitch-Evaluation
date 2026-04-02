@@ -25,6 +25,21 @@ python dataset_tools/prepare_videos_with_whisper.py `
   --compute-type int8
 ```
 
+### GPU debugging mode
+
+```powershell
+python dataset_tools/prepare_videos_with_whisper.py `
+  --input-dir backend/outputs/batch_input `
+  --model-size small `
+  --device cuda `
+  --compute-type float16 `
+  --debug-runtime `
+  --strict-gpu
+```
+
+- `--debug-runtime` prints CUDA and runtime diagnostics.
+- `--strict-gpu` prevents CPU fallback and fails fast when CUDA setup is broken.
+
 ### Notes
 
 - Install dependencies first: `pip install -r backend/requirements.txt`
