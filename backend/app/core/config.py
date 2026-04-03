@@ -3,9 +3,6 @@ from pathlib import Path
 
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-
-
 class Settings(BaseSettings):
     app_name: str = "Startup Pitch Evaluation API"
     app_version: str = "0.1.0"
@@ -33,7 +30,7 @@ class Settings(BaseSettings):
     nn_device: str = "auto"
 
     model_config = SettingsConfigDict(
-        env_file=(str(_PROJECT_ROOT / ".env"), str(_BACKEND_ROOT / ".env")),
+        env_file=str(_BACKEND_ROOT / ".env"),
         env_prefix="SPE_",
     )
 

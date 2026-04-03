@@ -113,7 +113,32 @@ h1 {
 
 .topbar-actions {
   display: flex;
+  align-items: center;
   gap: 0.55rem;
+}
+
+.mode-badge {
+  border-radius: 999px;
+  padding: 0.42rem 0.78rem;
+  border: 1px solid #bfd6d4;
+  background: #eef8f7;
+  color: #1d5b57;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+}
+
+.mode-badge.is-heuristic {
+  border-color: #e2c8a5;
+  background: #fff5e6;
+  color: #754521;
+}
+
+.mode-badge.is-neural {
+  border-color: #b5d9c2;
+  background: #eaf9ef;
+  color: #1f6a3e;
 }
 
 .workspace {

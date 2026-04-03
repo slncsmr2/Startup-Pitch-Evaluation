@@ -53,6 +53,7 @@ class EvaluationSummary(BaseModel):
     confidence_score: float
     investment_band: str
     language_detected: str
+    scoring_mode: str = "heuristic"
     strengths: list[str]
     weaknesses: list[str]
     suggestions: list[str]

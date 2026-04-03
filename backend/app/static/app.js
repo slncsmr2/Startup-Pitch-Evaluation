@@ -3,6 +3,7 @@ const clearBtn = document.getElementById("clearBtn");
 const evaluateBtn = document.getElementById("evaluateBtn");
 const statusText = document.getElementById("statusText");
 const pitchPreview = document.getElementById("pitchPreview");
+const modeBadge = document.getElementById("modeBadge");
 
 const evaluationPlaceholder = document.getElementById("evaluationPlaceholder");
 const evaluationResults = document.getElementById("evaluationResults");
@@ -32,6 +33,7 @@ const videoRatingText = document.getElementById("videoRatingText");
 let selectedVideoFileName = "pitch.mp4";
 let selectedVideoDurationSec = 120;
 let latestRating = null;
+let currentScoringMode = "unknown";
 
 const fields = {
   title: document.getElementById("title"),
@@ -147,6 +149,7 @@ function renderSummary(summary) {
   const bandClass = `band-${summary.investment_band}`;
   const overall = Number(summary.overall_score || 0);
   const confidence = Number(summary.confidence_score || 0);
+  const scoringMode = currentScoringMode || "unknown";
 
   summaryCard.innerHTML = `
     <h3>Overall Summary</h3>
@@ -156,6 +159,7 @@ function renderSummary(summary) {
       <span>/ 10</span>
     </div>
     <p><strong>Language Detected:</strong> ${escapeHtml(summary.language_detected)}</p>
+    <p><strong>Scoring Mode:</strong> ${escapeHtml(scoringMode)}</p>
     <p><strong>Processing Option:</strong> ${escapeHtml(summary.processing_option || "unknown")}</p>
     <p><strong>Runtime:</strong> ${escapeHtml((summary.processing_notes || []).join(" | ") || "-")}</p>
     <span class="band-pill ${bandClass}">${escapeHtml(summary.investment_band)}</span>
@@ -303,13 +307,8 @@ async function evaluatePitch(payload) {
 }
 
 function clearForm() {
-  Object.values(fields).forEach((field) => {
-    field.value = "";
-  });
-  latestRating = null;
-  hideVideoRatingPanel();
-  renderPitchPreview(toPayload());
-  statusText.textContent = "Cleared.";
+  // Full reset to match refreshed page behavior.
+  globalThis.location.reload();
 }
 
 function fillSample() {
@@ -334,6 +333,41 @@ form.addEventListener("submit", async (event) => {
 clearBtn.addEventListener("click", () => {
   clearForm();
 });
+
+function normalizeScoringMode(value) {
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode.includes("heuristic")) {
+    return "heuristic";
+  }
+  if (mode.includes("neural")) {
+    return "neural-network";
+  }
+  return mode || "unknown";
+}
+
+function updateScoringModeBadge(mode) {
+  if (!modeBadge) {
+    return;
+  }
+  currentScoringMode = normalizeScoringMode(mode);
+  modeBadge.textContent = `Scoring Mode: ${currentScoringMode}`;
+  modeBadge.classList.toggle("is-heuristic", currentScoringMode === "heuristic");
+  modeBadge.classList.toggle("is-neural", currentScoringMode === "neural-network");
+}
+
+async function loadScoringMode() {
+  try {
+    const response = await fetch("/scoring-mode");
+    if (!response.ok) {
+      throw new Error(`Scoring mode endpoint failed with status ${response.status}`);
+    }
+    const data = await response.json();
+    updateScoringModeBadge(data.scoring_mode);
+  } catch (err) {
+    console.error("Failed to load scoring mode:", err);
+    updateScoringModeBadge("unknown");
+  }
+}
 
 Object.values(fields)
   .filter(Boolean)
@@ -451,6 +485,7 @@ pitchVideo.addEventListener("ended", () => {
 });
 
 // Load videos on page start
+await loadScoringMode();
 await loadVideoList();
 
 renderPitchPreview(toPayload());

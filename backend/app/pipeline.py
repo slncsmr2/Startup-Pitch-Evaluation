@@ -234,6 +234,7 @@ class StartupPitchPipeline:
             confidence_score=confidence_score,
             investment_band=investment_band,
             language_detected=language_detected,
+            scoring_mode="heuristic" if settings.use_heuristic_pipeline else "neural-network",
             strengths=feedback["strengths"],
             weaknesses=feedback["weaknesses"],
             suggestions=feedback["suggestions"],

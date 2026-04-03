@@ -29,7 +29,19 @@ logger.info(
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": settings.app_name, "version": settings.app_version}
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "scoring_mode": "heuristic" if settings.use_heuristic_pipeline else "neural-network",
+    }
+
+
+@app.get("/scoring-mode")
+def scoring_mode() -> dict:
+    return {
+        "scoring_mode": "heuristic" if settings.use_heuristic_pipeline else "neural-network"
+    }
 
 
 @app.get("/")
