@@ -82,7 +82,7 @@ class FusionHead:
                 checkpoint_path = self._resolve_checkpoint_path(settings.nn_checkpoint_path)
                 if checkpoint_path.exists():
                     try:
-                        state_dict = torch.load(str(checkpoint_path), map_location=self._device)
+                        state_dict = torch.load(str(checkpoint_path), map_location=self._device,weights_only=True)
                         if "fusion_head" in state_dict:
                             self._attention_layer.load_state_dict(state_dict["fusion_head"], strict=False)
                             self._checkpoint_loaded = True
@@ -115,6 +115,7 @@ class FusionHead:
         base = [s / total for s in strengths]
 
         min_share = 0.15
+        max_share = 0.6
         floors = [min_share, min_share, min_share]
         remaining = 1.0 - sum(floors)
 
@@ -124,6 +125,24 @@ class FusionHead:
             return min_share, min_share, min_share + remaining
 
         weights = [f + (remaining * (e / extra_total)) for f, e in zip(floors, extra)]
+
+        # Prevent a single modality from dominating fallback attention.
+        max_idx = max(range(3), key=lambda i: weights[i])
+        if weights[max_idx] > max_share:
+            excess = weights[max_idx] - max_share
+            weights[max_idx] = max_share
+
+            other_indices = [i for i in range(3) if i != max_idx]
+            slack = [max(0.0, max_share - weights[i]) for i in other_indices]
+            slack_total = sum(slack)
+            if slack_total <= 1e-9:
+                split = excess / 2.0
+                weights[other_indices[0]] += split
+                weights[other_indices[1]] += split
+            else:
+                weights[other_indices[0]] += excess * (slack[0] / slack_total)
+                weights[other_indices[1]] += excess * (slack[1] / slack_total)
+
         return weights[0], weights[1], weights[2]
 
     def _deterministic_fallback_fusion(
@@ -162,14 +181,15 @@ class FusionHead:
 
     def infer(self, text_embedding: list[float], visual_embedding: list[float], audio_embedding: list[float]) -> dict:
         if self.use_heuristic or len(text_embedding) == 24 or self._torch is None:
-            text_energy = self._mean(text_embedding)
-            visual_energy = self._mean(visual_embedding)
-            audio_energy = self._mean(audio_embedding)
+            text_energy = self._mean([abs(v) for v in text_embedding])
+            visual_energy = self._mean([abs(v) for v in visual_embedding])
+            audio_energy = self._mean([abs(v) for v in audio_embedding])
 
-            total = max(1e-6, text_energy + visual_energy + audio_energy)
-            text_w = text_energy / total
-            visual_w = visual_energy / total
-            audio_w = audio_energy / total
+            text_w, visual_w, audio_w = self._compute_attention_from_strengths(
+                text_energy,
+                visual_energy,
+                audio_energy,
+            )
 
             fused_vector = [
                 (text_w * t) + (visual_w * v) + (audio_w * a)

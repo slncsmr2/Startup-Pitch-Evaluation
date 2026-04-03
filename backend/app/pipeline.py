@@ -106,9 +106,9 @@ class StartupPitchPipeline:
 
     @staticmethod
     def _compute_investment_band(overall_score: float) -> str:
-        if overall_score >= 8.0:
+        if overall_score >= 7.0:
             return "high-potential"
-        if overall_score >= 6.0:
+        if overall_score >= 5.0:
             return "watchlist"
         return "early-risk"
 

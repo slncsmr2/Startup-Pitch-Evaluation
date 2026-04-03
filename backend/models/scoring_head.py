@@ -91,7 +91,7 @@ class ScoringHead:
 
             if checkpoint_path and checkpoint_path.exists():
                 try:
-                    state_dict = torch.load(str(checkpoint_path), map_location=self._device)
+                    state_dict = torch.load(str(checkpoint_path), map_location=self._device,weights_only=True)
                     if "scoring_head" in state_dict:
                         self._internal_model.load_state_dict(state_dict["scoring_head"])
                     else:
@@ -122,7 +122,34 @@ class ScoringHead:
     def _calibrated_aggregate(text_avg: float, av_avg: float) -> float:
         # Keep overall rating aligned with modality metrics when neural aggregate
         # weights are unavailable (e.g., checkpoint missing).
-        return max(0.0, min(10.0, (text_avg * 0.6) + (av_avg * 0.4)))
+        raw = max(0.0, min(10.0, (text_avg * 0.6) + (av_avg * 0.4)))
+        return ScoringHead._calibrate_overall_score(raw)
+
+    @staticmethod
+    def _calibrate_overall_score(raw_score: float) -> float:
+        clamped = max(0.0, min(10.0, raw_score))
+
+        # Apply a mild downward calibration so "okay" stays around 5-6 while
+        # still allowing very strong pitches to cross 7.
+        if clamped <= 6.5:
+            return max(0.0, clamped - 0.25)
+        if clamped <= 8.0:
+            return 6.25 + ((clamped - 6.5) * 0.5)
+        return 7.0 + ((clamped - 8.0) * 0.3)
+
+    @staticmethod
+    def _stabilize_aggregate(model_aggregate: float, baseline_aggregate: float, confidence: float) -> float:
+        model = max(0.0, min(10.0, model_aggregate))
+        baseline = max(0.0, min(10.0, baseline_aggregate))
+        conf = max(0.0, min(10.0, confidence))
+
+        # Guardrail: when checkpoint overall drifts too far from metric-derived
+        # evidence, prefer the calibrated baseline to keep score semantics stable.
+        if conf >= 4.0 and model < 2.5 and baseline >= 4.0:
+            return baseline
+        if abs(model - baseline) > 3.0:
+            return baseline
+        return model
 
     def infer(self, text_features: dict, visual_features: dict, audio_features: dict, fused: dict) -> dict:
         if self.use_heuristic or len(fused["vector"]) == 24 or self._torch is None:
@@ -143,9 +170,10 @@ class ScoringHead:
 
             text_avg = self._avg(list(text_scores.values()))
             av_avg = self._avg(list(av_scores.values()))
-            fusion_signal = self._avg(fused["vector"]) * 10.0
+            fusion_signal = self._avg(fused["vector"]) * 8.0
 
-            aggregate = self._clamp_10((text_avg * 0.5) + (av_avg * 0.35) + (fusion_signal * 0.15))
+            raw_aggregate = self._clamp_10((text_avg * 0.6) + (av_avg * 0.35) + (fusion_signal * 0.05))
+            aggregate = self._clamp_10(self._calibrate_overall_score(raw_aggregate))
             confidence = self._clamp_10((av_avg * 0.5) + (text_avg * 0.5))
 
             return {
@@ -168,11 +196,13 @@ class ScoringHead:
                 text_avg = self._avg(list(text_scores.values()))
                 av_avg = self._avg(list(av_scores.values()))
                 confidence = self._clamp_10((av_avg * 0.5) + (text_avg * 0.5))
+                baseline_aggregate = self._calibrated_aggregate(text_avg, av_avg)
 
                 if self._checkpoint_loaded:
-                    aggregate = self._clamp_10(float(overall_val))
+                    model_aggregate = self._clamp_10(self._calibrate_overall_score(float(overall_val)))
+                    aggregate = self._stabilize_aggregate(model_aggregate, baseline_aggregate, confidence)
                 else:
-                    aggregate = self._calibrated_aggregate(text_avg, av_avg)
+                    aggregate = baseline_aggregate
 
                 return {
                     "text_scores": text_scores,
