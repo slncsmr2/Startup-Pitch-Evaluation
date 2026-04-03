@@ -1,6 +1,9 @@
 import hashlib
 import logging
+import wave
 from pathlib import Path
+
+import numpy as np
 from app.core.config import settings
 
 
@@ -28,6 +31,7 @@ class AudioEncoder:
         self._cnn = None
         self._scoring_mlp = None
         self._device = "cpu"
+        self._warned_torchcodec = False
 
         if not self.use_heuristic:
             self._initialize_neural_backend()
@@ -103,6 +107,14 @@ class AudioEncoder:
         if not path.is_file():
             return None
 
+        # Chunk extraction currently writes WAV files. Read them directly first
+        # to avoid torchaudio backend selection (which can trigger torchcodec
+        # native loader errors on Windows environments).
+        if path.suffix.lower() == ".wav":
+            waveform = self._load_waveform_with_wave(path)
+            if waveform is not None:
+                return waveform
+
         try:
             waveform, sr = self._torchaudio.load(str(path))
             if waveform.shape[0] > 1:
@@ -115,7 +127,51 @@ class AudioEncoder:
                 )
             return waveform.to(self._device)
         except Exception as exc:
-            logger.warning("Neural audio waveform load failed for %s: %s", audio_path, exc)
+            if "torchcodec" in str(exc).lower() and not self._warned_torchcodec:
+                logger.warning(
+                    "TorchCodec backend unavailable; using stdlib WAV fallback for neural audio loading."
+                )
+                self._warned_torchcodec = True
+            waveform = self._load_waveform_with_wave(path)
+            if waveform is not None:
+                return waveform
+            logger.warning("Neural audio waveform load failed for %s", audio_path)
+            return None
+
+    def _load_waveform_with_wave(self, path: Path):
+        if path.suffix.lower() != ".wav":
+            return None
+
+        try:
+            with wave.open(str(path), "rb") as wav_file:
+                channels = wav_file.getnchannels()
+                sample_width = wav_file.getsampwidth()
+                sample_rate = wav_file.getframerate()
+                frames = wav_file.readframes(wav_file.getnframes())
+
+            if not frames:
+                return None
+
+            if sample_width == 2:
+                samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+            elif sample_width == 4:
+                samples = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
+            else:
+                return None
+
+            if channels > 1:
+                samples = samples.reshape(-1, channels).mean(axis=1)
+
+            waveform = self._torch.from_numpy(samples).unsqueeze(0)
+            if int(sample_rate) != int(self.sample_rate):
+                waveform = self._torchaudio.functional.resample(
+                    waveform,
+                    orig_freq=int(sample_rate),
+                    new_freq=self.sample_rate,
+                )
+
+            return waveform.to(self._device)
+        except Exception:
             return None
 
     def _pad_or_trim_frames(self, mfcc):

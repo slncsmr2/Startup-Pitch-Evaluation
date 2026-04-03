@@ -1,5 +1,5 @@
-import os
 import logging
+from pathlib import Path
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -12,6 +12,7 @@ class ScoringHead:
         self.fused_dim = fused_dim
         self._torch = None
         self._device = "cpu"
+        self._checkpoint_loaded = False
         
         self.metric_names_text = [
             "Problem Clarity",
@@ -31,6 +32,21 @@ class ScoringHead:
 
         if not self.use_heuristic:
             self._initialize_neural_backend()
+
+    @staticmethod
+    def _resolve_checkpoint_path(raw_path: str) -> Path:
+        candidate = Path(raw_path).expanduser()
+        if candidate.is_absolute():
+            return candidate
+
+        backend_root = Path(__file__).resolve().parents[1]
+        project_root = Path(__file__).resolve().parents[2]
+
+        backend_candidate = backend_root / candidate
+        if backend_candidate.exists():
+            return backend_candidate
+
+        return project_root / candidate
             
     def _initialize_neural_backend(self) -> None:
         try:
@@ -68,15 +84,26 @@ class ScoringHead:
             self._internal_model.to(self._device)
             self._internal_model.eval()
 
-            if settings.nn_checkpoint_path and os.path.exists(settings.nn_checkpoint_path):
+            if settings.nn_checkpoint_path:
+                checkpoint_path = self._resolve_checkpoint_path(settings.nn_checkpoint_path)
+            else:
+                checkpoint_path = None
+
+            if checkpoint_path and checkpoint_path.exists():
                 try:
-                    state_dict = torch.load(settings.nn_checkpoint_path, map_location=self._device)
+                    state_dict = torch.load(str(checkpoint_path), map_location=self._device)
                     if "scoring_head" in state_dict:
                         self._internal_model.load_state_dict(state_dict["scoring_head"])
                     else:
                         self._internal_model.load_state_dict(state_dict, strict=False)
+                    self._checkpoint_loaded = True
                 except Exception as e:
-                    logger.warning(f"Failed to load checkpoint from {settings.nn_checkpoint_path}: {e}")
+                    logger.warning(f"Failed to load checkpoint from {checkpoint_path}: {e}")
+            elif checkpoint_path:
+                logger.warning(
+                    "Scoring checkpoint not found at %s. Falling back to calibrated aggregate from metric heads.",
+                    checkpoint_path,
+                )
         except ImportError:
             logger.warning("Neural scoring disabled. Enable by installing torch.")
             self.use_heuristic = True
@@ -90,6 +117,12 @@ class ScoringHead:
     @staticmethod
     def _clamp_10(value: float) -> float:
         return max(0.0, min(10.0, value))
+
+    @staticmethod
+    def _calibrated_aggregate(text_avg: float, av_avg: float) -> float:
+        # Keep overall rating aligned with modality metrics when neural aggregate
+        # weights are unavailable (e.g., checkpoint missing).
+        return max(0.0, min(10.0, (text_avg * 0.6) + (av_avg * 0.4)))
 
     def infer(self, text_features: dict, visual_features: dict, audio_features: dict, fused: dict) -> dict:
         if self.use_heuristic or len(fused["vector"]) == 24 or self._torch is None:
@@ -136,9 +169,14 @@ class ScoringHead:
                 av_avg = self._avg(list(av_scores.values()))
                 confidence = self._clamp_10((av_avg * 0.5) + (text_avg * 0.5))
 
+                if self._checkpoint_loaded:
+                    aggregate = self._clamp_10(float(overall_val))
+                else:
+                    aggregate = self._calibrated_aggregate(text_avg, av_avg)
+
                 return {
                     "text_scores": text_scores,
                     "av_scores": av_scores,
-                    "aggregate": round(float(overall_val), 2),
+                    "aggregate": round(aggregate, 2),
                     "confidence": round(confidence, 2),
                 }

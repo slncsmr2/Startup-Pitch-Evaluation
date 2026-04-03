@@ -101,6 +101,39 @@ def _select_device(torch, requested: str):
     return torch.device("cpu")
 
 
+def _device_diagnostics(torch, requested: str, selected_device) -> dict:
+    requested_norm = requested.strip().lower()
+    cuda_available = bool(torch.cuda.is_available())
+    torch_cuda = getattr(torch.version, "cuda", None)
+    reason = "selected-requested"
+
+    if selected_device.type == "cpu" and requested_norm in {"cuda", "gpu", "auto"}:
+        if not cuda_available:
+            if torch_cuda is None:
+                reason = "cpu-only-torch-build"
+            else:
+                reason = "cuda-not-available-runtime"
+        else:
+            reason = "cpu-selected"
+
+    return {
+        "requested_device": requested,
+        "selected_device": str(selected_device),
+        "cuda_available": cuda_available,
+        "torch_version": str(torch.__version__),
+        "torch_cuda": torch_cuda,
+        "device_count": int(torch.cuda.device_count()) if cuda_available else 0,
+        "reason": reason,
+    }
+
+
+def _build_grad_scaler(torch, enabled: bool):
+    try:
+        return torch.amp.GradScaler("cuda", enabled=enabled)
+    except Exception:
+        return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
 def _tensorize_samples(torch, samples: list[TrainingSample]):
     text = torch.tensor([s.text_features for s in samples], dtype=torch.float32)
     visual = torch.tensor([s.visual_features for s in samples], dtype=torch.float32)
@@ -346,7 +379,11 @@ def train_from_config(config_path: str) -> dict:
         T_0=max(1, int(config["warm_restart_t0"])),
         T_mult=max(1, int(config["warm_restart_t_mult"])),
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda" and bool(config["mixed_precision"])))
+    scaler = _build_grad_scaler(
+        torch,
+        enabled=(device.type == "cuda" and bool(config["mixed_precision"])),
+    )
+    diagnostics = _device_diagnostics(torch, str(config["device"]), device)
 
     history: list[dict] = []
     best_epoch = 0
@@ -425,6 +462,7 @@ def train_from_config(config_path: str) -> dict:
     return {
         "checkpoint_path": str(checkpoint),
         "device": str(device),
+        "device_diagnostics": diagnostics,
         "val_source": val_source,
         "epochs_ran": len(history),
         "best_epoch": best_epoch,
@@ -459,7 +497,7 @@ def evaluate_from_config(config_path: str, checkpoint_path: str | None = None) -
         model=model,
         loader=test_loader,
         optimizer=None,
-        scaler=torch.cuda.amp.GradScaler(enabled=False),
+        scaler=_build_grad_scaler(torch, enabled=False),
         device=device,
         train_mode=False,
         cls_weight=float(config["classification_loss_weight"]),
@@ -468,4 +506,6 @@ def evaluate_from_config(config_path: str, checkpoint_path: str | None = None) -
     )
     result = stats["evaluation"]
     result["loss"] = round(float(stats["loss"]), 4)
+    result["device"] = str(device)
+    result["device_diagnostics"] = _device_diagnostics(torch, str(config["device"]), device)
     return result

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,9 +16,25 @@ class FusionHead:
         self._torch = None
         self._attention_layer = None
         self._device = "cpu"
+        self._checkpoint_loaded = False
         
         if not self.use_heuristic:
             self._initialize_neural_backend()
+
+    @staticmethod
+    def _resolve_checkpoint_path(raw_path: str) -> Path:
+        candidate = Path(raw_path).expanduser()
+        if candidate.is_absolute():
+            return candidate
+
+        backend_root = Path(__file__).resolve().parents[1]
+        project_root = Path(__file__).resolve().parents[2]
+
+        backend_candidate = backend_root / candidate
+        if backend_candidate.exists():
+            return backend_candidate
+
+        return project_root / candidate
 
     def _initialize_neural_backend(self) -> None:
         try:
@@ -60,6 +77,18 @@ class FusionHead:
             self._attention_layer = CrossModalAttentionLayer(
                 self.text_dim, self.visual_dim, self.audio_dim, self.common_dim
             )
+
+            if settings.nn_checkpoint_path:
+                checkpoint_path = self._resolve_checkpoint_path(settings.nn_checkpoint_path)
+                if checkpoint_path.exists():
+                    try:
+                        state_dict = torch.load(str(checkpoint_path), map_location=self._device)
+                        if "fusion_head" in state_dict:
+                            self._attention_layer.load_state_dict(state_dict["fusion_head"], strict=False)
+                            self._checkpoint_loaded = True
+                    except Exception as exc:
+                        logger.warning("Failed to load fusion_head checkpoint from %s: %s", checkpoint_path, exc)
+
             self._attention_layer.to(self._device)
             self._attention_layer.eval()
         except ImportError:
@@ -69,6 +98,67 @@ class FusionHead:
     @staticmethod
     def _mean(values: list[float]) -> float:
         return sum(values) / max(1, len(values))
+
+    @staticmethod
+    def _to_common_dim(values: list[float], common_dim: int) -> list[float]:
+        if not values:
+            return [0.0] * common_dim
+        if len(values) >= common_dim:
+            return values[:common_dim]
+        repeats = (common_dim // len(values)) + 1
+        return (values * repeats)[:common_dim]
+
+    @staticmethod
+    def _compute_attention_from_strengths(text_s: float, visual_s: float, audio_s: float) -> tuple[float, float, float]:
+        strengths = [max(1e-6, text_s), max(1e-6, visual_s), max(1e-6, audio_s)]
+        total = sum(strengths)
+        base = [s / total for s in strengths]
+
+        min_share = 0.15
+        floors = [min_share, min_share, min_share]
+        remaining = 1.0 - sum(floors)
+
+        extra = [max(0.0, b - min_share) for b in base]
+        extra_total = sum(extra)
+        if extra_total <= 1e-9:
+            return min_share, min_share, min_share + remaining
+
+        weights = [f + (remaining * (e / extra_total)) for f, e in zip(floors, extra)]
+        return weights[0], weights[1], weights[2]
+
+    def _deterministic_fallback_fusion(
+        self,
+        text_embedding: list[float],
+        visual_embedding: list[float],
+        audio_embedding: list[float],
+    ) -> dict:
+        t_vec = self._to_common_dim(text_embedding, self.common_dim)
+        v_vec = self._to_common_dim(visual_embedding, self.common_dim)
+        a_vec = self._to_common_dim(audio_embedding, self.common_dim)
+
+        text_strength = self._mean([abs(v) for v in text_embedding])
+        visual_strength = self._mean([abs(v) for v in visual_embedding])
+        audio_strength = self._mean([abs(v) for v in audio_embedding])
+
+        text_w, visual_w, audio_w = self._compute_attention_from_strengths(
+            text_strength,
+            visual_strength,
+            audio_strength,
+        )
+
+        fused_vector = [
+            (text_w * t) + (visual_w * v) + (audio_w * a)
+            for t, v, a in zip(t_vec, v_vec, a_vec)
+        ]
+
+        return {
+            "vector": fused_vector,
+            "attention": {
+                "text": round(text_w, 4),
+                "visual": round(visual_w, 4),
+                "audio": round(audio_w, 4),
+            },
+        }
 
     def infer(self, text_embedding: list[float], visual_embedding: list[float], audio_embedding: list[float]) -> dict:
         if self.use_heuristic or len(text_embedding) == 24 or self._torch is None:
@@ -94,6 +184,9 @@ class FusionHead:
                     "audio": round(audio_w, 4),
                 },
             }
+
+        if not self._checkpoint_loaded:
+            return self._deterministic_fallback_fusion(text_embedding, visual_embedding, audio_embedding)
         
         with self._torch.no_grad():
             t_tensor = self._torch.tensor(text_embedding, dtype=self._torch.float32, device=self._device).unsqueeze(0)

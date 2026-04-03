@@ -1,19 +1,27 @@
-# Phase-6 GPU profile (Option A data strategy)
 data_strategy: option_a
 device: gpu
-epochs: 40
-batch_size: 16
-learning_rate: 0.0001
-weight_decay: 0.01
+
+epochs: 80
+batch_size: 8
+
+learning_rate: 0.0003
+weight_decay: 0.001
+
 warm_restart_t0: 10
 warm_restart_t_mult: 2
-early_stopping_patience: 10
+
+early_stopping_patience: 20
+
 classification_loss_weight: 1.0
-spearman_loss_weight: 0.05
+spearman_loss_weight: 0.2
+
 mixed_precision: true
-train_samples: 200
-val_samples: 64
-test_samples: 64
+
+train_samples: 100
+val_samples: 20
+test_samples: 20
+
 seed: 11
+
 checkpoint_dir: models/checkpoints
 checkpoint_name: phase6_gpu_nn_model.pt
