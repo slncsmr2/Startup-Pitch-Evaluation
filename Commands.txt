@@ -1,4 +1,5 @@
-
+ & c:\Users\aravi\OneDrive\Documents\GitHub\Startup-Pitch-Evaluation\.venv\Scripts\Activate.ps1
+ 
 python.exe prepare_videos_with_whisper.py --input-dir backend/Input-Output/Training --model-size small --device cuda --compute-type float16 --debug-runtime --strict-gpu
 
 python.exe prepare_videos_with_whisper.py --input-dir backend/Input-Output/Testing --model-size small --device cuda --compute-type float16 --debug-runtime --strict-gpu
