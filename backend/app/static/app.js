@@ -335,7 +335,9 @@ clearBtn.addEventListener("click", () => {
 });
 
 function normalizeScoringMode(value) {
-  const mode = String(value || "").trim().toLowerCase();
+  const mode = String(value || "")
+    .trim()
+    .toLowerCase();
   if (mode.includes("heuristic")) {
     return "heuristic";
   }
@@ -351,15 +353,23 @@ function updateScoringModeBadge(mode) {
   }
   currentScoringMode = normalizeScoringMode(mode);
   modeBadge.textContent = `Scoring Mode: ${currentScoringMode}`;
-  modeBadge.classList.toggle("is-heuristic", currentScoringMode === "heuristic");
-  modeBadge.classList.toggle("is-neural", currentScoringMode === "neural-network");
+  modeBadge.classList.toggle(
+    "is-heuristic",
+    currentScoringMode === "heuristic",
+  );
+  modeBadge.classList.toggle(
+    "is-neural",
+    currentScoringMode === "neural-network",
+  );
 }
 
 async function loadScoringMode() {
   try {
     const response = await fetch("/scoring-mode");
     if (!response.ok) {
-      throw new Error(`Scoring mode endpoint failed with status ${response.status}`);
+      throw new Error(
+        `Scoring mode endpoint failed with status ${response.status}`,
+      );
     }
     const data = await response.json();
     updateScoringModeBadge(data.scoring_mode);
