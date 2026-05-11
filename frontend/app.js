@@ -45,9 +45,19 @@ function escapeHtml(value) {
 }
 
 function normalizeBaseUrl(value) {
-  return String(value || "")
+  const raw = String(value || "")
     .trim()
     .replace(/\/+$/, "");
+
+  if (!raw) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+
+  return `https://${raw}`;
 }
 
 function getApiBaseUrl() {
@@ -60,7 +70,9 @@ function getApiBaseUrl() {
 function setApiBaseUrl(value) {
   const normalized = normalizeBaseUrl(value);
   apiBaseUrlInput.value = normalized;
-  localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
+  if (normalized) {
+    localStorage.setItem(API_BASE_STORAGE_KEY, normalized);
+  }
   return normalized;
 }
 
@@ -209,6 +221,13 @@ function toPayload() {
 async function refreshBackendStatus() {
   const baseUrl = setApiBaseUrl(getApiBaseUrl());
 
+  if (!baseUrl) {
+    setHealthState("Backend: not set", "is-error");
+    updateModeBadge("unknown");
+    statusText.textContent = "Set your ngrok URL first";
+    return;
+  }
+
   try {
     const [healthResponse, modeResponse] = await Promise.all([
       fetch(`${baseUrl}/health`),
@@ -235,6 +254,13 @@ async function refreshBackendStatus() {
 
 async function evaluatePitch(payload) {
   const baseUrl = setApiBaseUrl(getApiBaseUrl());
+  if (!baseUrl) {
+    evaluationPlaceholder.classList.remove("hidden");
+    evaluationPlaceholder.textContent = "Set the backend API URL first.";
+    evaluationResults.classList.add("hidden");
+    statusText.textContent = "Backend URL missing";
+    return;
+  }
   setLoading(true);
 
   try {
