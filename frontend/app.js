@@ -30,7 +30,8 @@ const fields = {
 };
 
 const API_BASE_STORAGE_KEY = "spe_api_base_url";
-const DEFAULT_API_BASE_URL = window.SPE_API_BASE_URL || "http://127.0.0.1:8000";
+const DEFAULT_API_BASE_URL =
+  globalThis.SPE_API_BASE_URL || "http://127.0.0.1:8000";
 
 let currentScoringMode = "unknown";
 

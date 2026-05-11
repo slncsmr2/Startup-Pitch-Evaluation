@@ -119,6 +119,23 @@ h1 {
   justify-content: flex-end;
 }
 
+.api-hint {
+  width: min(1240px, 92vw);
+  margin: 0 auto 0.8rem auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #d9d0c1;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 14px;
+}
+
+.api-hint code {
+  font-family: inherit;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .mode-badge {
   border-radius: 999px;
   padding: 0.42rem 0.78rem;
