@@ -119,21 +119,28 @@ h1 {
   justify-content: flex-end;
 }
 
-.api-hint {
-  width: min(1240px, 92vw);
-  margin: 0 auto 0.8rem auto;
-  color: var(--muted);
-  font-size: 0.9rem;
-  padding: 0.55rem 0.8rem;
+.api-settings {
+  margin-top: 0.35rem;
   border: 1px solid #d9d0c1;
-  background: rgba(255, 255, 255, 0.55);
   border-radius: 14px;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.45);
 }
 
-.api-hint code {
-  font-family: inherit;
+.api-settings summary {
+  cursor: pointer;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--teal);
+}
+
+.api-settings p {
+  margin: 0.5rem 0 0.65rem 0;
+}
+
+.required-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .mode-badge {

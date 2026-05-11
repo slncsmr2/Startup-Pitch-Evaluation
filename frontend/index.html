@@ -23,7 +23,7 @@
         <p class="eyebrow">Investor Lens</p>
         <h1>Startup Pitch Evaluation</h1>
         <p class="subhead">
-          Standalone frontend that calls your Colab or hosted backend.
+          Upload a pitch video and review the score from your backend.
         </p>
       </div>
       <div class="topbar-actions">
@@ -32,32 +32,49 @@
       </div>
     </header>
 
-    <section class="api-hint">
-      Open with <code>?api=https://your-ngrok-url</code> or paste the URL into
-      the API field.
-    </section>
-
     <main class="workspace">
       <section class="panel input-panel">
         <div class="panel-header">
-          <h2>Connection</h2>
-          <p>Point this frontend at your backend API.</p>
+          <h2>Connection and Input</h2>
+          <p>Upload one video. Everything else is optional.</p>
         </div>
 
-        <label>
-          API Base URL
-          <input
-            id="apiBaseUrl"
-            placeholder="https://xxxx.ngrok-free.app or http://127.0.0.1:8000"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </label>
+        <details class="api-settings">
+          <summary>Backend URL</summary>
+          <p class="small">
+            Optional. Use <code>?api=https://your-ngrok-url</code> in the page
+            URL or paste the backend URL here.
+          </p>
+          <label>
+            API Base URL
+            <input
+              id="apiBaseUrl"
+              placeholder="https://xxxx.ngrok-free.app or http://127.0.0.1:8000"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </details>
 
         <form id="pitchForm" class="pitch-form">
+          <p class="required-note">
+            Video upload is required. All other fields are optional.
+          </p>
+
+          <label>
+            Pitch Video
+            <input
+              id="videoFile"
+              name="videoFile"
+              type="file"
+              accept="video/*"
+              required
+            />
+          </label>
+
           <label>
             Title
-            <input id="title" name="title" required placeholder="RetailPulse" />
+            <input id="title" name="title" placeholder="RetailPulse" />
           </label>
 
           <label>
@@ -66,8 +83,7 @@
               id="transcript"
               name="transcript"
               rows="8"
-              required
-              placeholder="Paste the pitch transcript here"
+              placeholder="Optional transcript for better results"
             ></textarea>
           </label>
 
@@ -131,7 +147,7 @@
 
         <article class="pitch-preview" id="pitchPreview">
           <h3>Pitch Snapshot</h3>
-          <p>Fill the form to preview your startup pitch summary.</p>
+          <p>Upload a video to preview the submission summary.</p>
         </article>
       </section>
 

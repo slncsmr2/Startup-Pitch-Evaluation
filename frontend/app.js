@@ -19,6 +19,7 @@ const bandKpi = document.getElementById("bandKpi");
 const pitchPreview = document.getElementById("pitchPreview");
 
 const fields = {
+  videoFile: document.getElementById("videoFile"),
   title: document.getElementById("title"),
   transcript: document.getElementById("transcript"),
   languageHint: document.getElementById("languageHint"),
@@ -88,9 +89,15 @@ function listFromTextarea(value) {
     .filter(Boolean);
 }
 
+function getSelectedVideoFile() {
+  return fields.videoFile?.files?.[0] || null;
+}
+
 function renderPitchPreview(payload) {
+  const videoFile = getSelectedVideoFile();
   pitchPreview.innerHTML = `
     <h3>${escapeHtml(payload.title)}</h3>
+    <p><strong>Video:</strong> ${escapeHtml(payload.video?.file_name || videoFile?.name || "Required")}</p>
     <p><strong>Founder:</strong> ${escapeHtml(payload.user_details.founder_name || "N/A")}</p>
     <p><strong>Startup:</strong> ${escapeHtml(payload.user_details.startup_name || "N/A")}</p>
     <p><strong>Sector:</strong> ${escapeHtml(payload.user_details.sector || "N/A")}</p>
@@ -193,9 +200,14 @@ function updateModeBadge(mode) {
 
 function toPayload() {
   const slidePoints = listFromTextarea(fields.slideText.value);
+  const videoFile = getSelectedVideoFile();
+  const titleValue = fields.title.value.trim();
+  const titleFromVideo = videoFile?.name
+    ? videoFile.name.replace(/\.[^.]+$/, "")
+    : "Untitled Pitch";
 
   return {
-    title: fields.title.value.trim() || "Untitled Pitch",
+    title: titleValue || titleFromVideo,
     transcript: fields.transcript.value.trim(),
     language_hint: fields.languageHint.value.trim() || "en",
     slide_text: slidePoints,
@@ -209,6 +221,14 @@ function toPayload() {
       title: `Slide ${index + 1}`,
       content: point,
     })),
+    video: videoFile
+      ? {
+          file_name: videoFile.name,
+          file_format: (videoFile.name.split(".").pop() || "mp4").toLowerCase(),
+          duration_sec: 60,
+          transcript_text: fields.transcript.value.trim(),
+        }
+      : null,
     user_details: {
       founder_name: fields.founderName.value.trim(),
       startup_name: fields.startupName.value.trim(),
@@ -216,6 +236,28 @@ function toPayload() {
       stage: fields.stage.value.trim(),
     },
   };
+}
+
+function buildUploadFormData(payload) {
+  const videoFile = getSelectedVideoFile();
+  if (!videoFile) {
+    throw new Error("Please upload a video file before evaluating.");
+  }
+
+  const formData = new FormData();
+  formData.append("video", videoFile);
+  formData.append(
+    "title",
+    payload.title || videoFile.name.replace(/\.[^.]+$/, ""),
+  );
+  formData.append("transcript", payload.transcript || "");
+  formData.append("language_hint", payload.language_hint || "en");
+  formData.append("slide_text", (payload.slide_text || []).join("\n"));
+  formData.append("founder_name", payload.user_details?.founder_name || "");
+  formData.append("startup_name", payload.user_details?.startup_name || "");
+  formData.append("sector", payload.user_details?.sector || "");
+  formData.append("stage", payload.user_details?.stage || "");
+  return formData;
 }
 
 async function refreshBackendStatus() {
@@ -264,12 +306,10 @@ async function evaluatePitch(payload) {
   setLoading(true);
 
   try {
-    const response = await fetch(`${baseUrl}/evaluate`, {
+    const formData = buildUploadFormData(payload);
+    const response = await fetch(`${baseUrl}/evaluate/upload`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+      body: formData,
     });
 
     if (!response.ok) {
@@ -299,6 +339,10 @@ Object.values(fields)
   .forEach((field) => {
     field.addEventListener("input", () => renderPitchPreview(toPayload()));
   });
+
+fields.videoFile?.addEventListener("change", () =>
+  renderPitchPreview(toPayload()),
+);
 
 apiBaseUrlInput.value = normalizeBaseUrl(
   localStorage.getItem(API_BASE_STORAGE_KEY) || DEFAULT_API_BASE_URL,
