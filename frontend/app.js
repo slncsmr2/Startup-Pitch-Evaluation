@@ -307,10 +307,21 @@ async function evaluatePitch(payload) {
 
   try {
     const formData = buildUploadFormData(payload);
-    const response = await fetch(`${baseUrl}/evaluate/upload`, {
+    const uploadResponse = await fetch(`${baseUrl}/evaluate/upload`, {
       method: "POST",
       body: formData,
     });
+
+    let response = uploadResponse;
+    if ((uploadResponse.status === 404 || uploadResponse.status === 405) && getSelectedVideoFile()) {
+      response = await fetch(`${baseUrl}/evaluate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    }
 
     if (!response.ok) {
       const maybeError = await response.text();

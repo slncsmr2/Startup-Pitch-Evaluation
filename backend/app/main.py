@@ -101,6 +101,10 @@ def evaluate_pitch(payload: PitchInput) -> EvaluationResponse:
     "/evaluate/upload",
     responses={400: {"description": "Bad Request: video file is required"}},
 )
+@app.post(
+    "/evaulate/upload",
+    responses={400: {"description": "Bad Request: video file is required"}},
+)
 async def evaluate_pitch_upload(
     video: Annotated[UploadFile, File(...)],
     title: Annotated[str, Form()] = "",
