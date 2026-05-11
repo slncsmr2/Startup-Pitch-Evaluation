@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Startup Pitch Evaluation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./config.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <div class="ambient ambient-three"></div>
+
+    <header class="topbar">
+      <div class="title-wrap">
+        <p class="eyebrow">Investor Lens</p>
+        <h1>Startup Pitch Evaluation</h1>
+        <p class="subhead">
+          Standalone frontend that calls your Colab or hosted backend.
+        </p>
+      </div>
+      <div class="topbar-actions">
+        <div id="modeBadge" class="mode-badge">Mode: loading...</div>
+        <div id="healthBadge" class="mode-badge">Backend: unknown</div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2>Connection</h2>
+          <p>Point this frontend at your backend API.</p>
+        </div>
+
+        <label>
+          API Base URL
+          <input
+            id="apiBaseUrl"
+            placeholder="https://xxxx.ngrok-free.app or http://127.0.0.1:8000"
+          />
+        </label>
+
+        <form id="pitchForm" class="pitch-form">
+          <label>
+            Title
+            <input id="title" name="title" required placeholder="RetailPulse" />
+          </label>
+
+          <label>
+            Transcript
+            <textarea
+              id="transcript"
+              name="transcript"
+              rows="8"
+              required
+              placeholder="Paste the pitch transcript here"
+            ></textarea>
+          </label>
+
+          <label>
+            Language Hint
+            <input
+              id="languageHint"
+              name="languageHint"
+              placeholder="en"
+              value="en"
+            />
+          </label>
+
+          <label>
+            Slide Points (one per line)
+            <textarea
+              id="slideText"
+              name="slideText"
+              rows="4"
+              placeholder="Problem\nSolution\nTraction"
+            ></textarea>
+          </label>
+
+          <div class="grid-two">
+            <label>
+              Founder Name
+              <input
+                id="founderName"
+                name="founderName"
+                placeholder="Founder Name"
+              />
+            </label>
+            <label>
+              Startup Name
+              <input
+                id="startupName"
+                name="startupName"
+                placeholder="Startup Name"
+              />
+            </label>
+            <label>
+              Sector
+              <input id="sector" name="sector" placeholder="FinTech" />
+            </label>
+            <label>
+              Stage
+              <input id="stage" name="stage" placeholder="Seed" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="evaluateBtn" class="primary-btn" type="submit">
+              Evaluate Pitch
+            </button>
+            <button id="refreshBtn" class="ghost-btn" type="button">
+              Refresh Status
+            </button>
+            <span id="statusText" class="status-text" aria-live="polite"></span>
+          </div>
+        </form>
+
+        <article class="pitch-preview" id="pitchPreview">
+          <h3>Pitch Snapshot</h3>
+          <p>Fill the form to preview your startup pitch summary.</p>
+        </article>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-header">
+          <h2>Evaluation Output</h2>
+          <p>
+            Read the score, strengths, weaknesses, and the raw API response.
+          </p>
+        </div>
+
+        <article id="evaluationPlaceholder" class="placeholder">
+          Submit a pitch to render evaluation insights.
+        </article>
+
+        <article id="evaluationResults" class="evaluation-results hidden">
+          <section class="summary-card" id="summaryCard"></section>
+
+          <section class="kpi-grid">
+            <article class="kpi-card">
+              <p class="kpi-label">Overall Score</p>
+              <p id="overallKpi" class="kpi-value">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Confidence</p>
+              <p id="confidenceKpi" class="kpi-value">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Investment Band</p>
+              <p id="bandKpi" class="kpi-value kpi-band">-</p>
+            </article>
+          </section>
+
+          <section class="result-grid">
+            <div>
+              <h3>Strengths</h3>
+              <div id="strengthsList" class="list-card"></div>
+            </div>
+            <div>
+              <h3>Weaknesses</h3>
+              <div id="weaknessesList" class="list-card"></div>
+            </div>
+          </section>
+
+          <section class="result-grid result-grid-lower">
+            <div>
+              <h3>Suggestions</h3>
+              <div id="suggestionsList" class="list-card"></div>
+            </div>
+            <div>
+              <h3>Notes</h3>
+              <div id="notesList" class="list-card"></div>
+            </div>
+          </section>
+
+          <section class="raw-json-wrap">
+            <details>
+              <summary>Raw API JSON</summary>
+              <pre id="rawJson" class="raw-json"></pre>
+            </details>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

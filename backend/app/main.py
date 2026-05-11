@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -16,6 +17,14 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 inference_service = InferenceService(window_seconds=settings.chunk_window_seconds)
 static_dir = Path(__file__).resolve().parent / "static"
 batch_input_dir = Path(__file__).resolve().parent.parent / "outputs" / "batch_input"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
