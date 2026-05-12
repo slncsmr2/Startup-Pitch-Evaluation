@@ -338,3 +338,5 @@ pip install -r backend/requirements.txt
 - Keep API and CLI behavior aligned via shared inference service.
 - Keep schema changes backward-compatible where possible.
 - Update tests and docs when changing endpoint behavior, scoring semantics, or config defaults.
+
+heehaa
