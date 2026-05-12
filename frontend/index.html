@@ -21,79 +21,61 @@
     <header class="topbar">
       <div class="title-wrap">
         <p class="eyebrow">Investor Lens</p>
-        <h1>Startup Pitch Evaluation</h1>
+        <h1>Startup Pitch Evaluation Studio</h1>
         <p class="subhead">
-          Upload a pitch video and review the score from your backend.
+          Craft your pitch on the left and inspect investor-ready signals on the
+          right.
         </p>
       </div>
       <div class="topbar-actions">
-        <div id="modeBadge" class="mode-badge">Mode: loading...</div>
-        <div id="healthBadge" class="mode-badge">Backend: unknown</div>
+        <div id="modeBadge" class="mode-badge" aria-live="polite">
+          Scoring Mode: loading...
+        </div>
+        <button id="clearBtn" class="ghost-btn ghost-alt" type="button">
+          Clear
+        </button>
       </div>
     </header>
 
     <main class="workspace">
       <section class="panel input-panel">
         <div class="panel-header">
-          <h2>Connection and Input</h2>
-          <p>Upload one video. Everything else is optional.</p>
+          <h2>Pitch Input</h2>
+          <p>Compose the startup pitch content and evaluate instantly.</p>
         </div>
 
-        <details class="api-settings">
-          <summary>Backend URL</summary>
-          <p class="small">
-            Optional. Use <code>?api=https://your-ngrok-url</code> in the page
-            URL or paste the backend URL here.
-          </p>
-          <label>
-            API Base URL
-            <input
-              id="apiBaseUrl"
-              placeholder="https://xxxx.ngrok-free.app or http://127.0.0.1:8000"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </label>
-        </details>
+        <!-- Video Player Section -->
+        <div class="video-section">
+          <div class="video-header">
+            <label for="videoSelect">Load Video</label>
+            <select id="videoSelect" class="video-select">
+              <option value="">Select a video...</option>
+            </select>
+          </div>
+          <div id="videoContainer" class="video-container hidden">
+            <video
+              id="pitchVideo"
+              class="pitch-video"
+              controls
+              controlsList="nodownload"
+            >
+              Your browser does not support the video tag.
+            </video>
+            <div class="video-info">
+              <p id="videoTitle" class="video-title"></p>
+              <p id="videoDuration" class="video-duration"></p>
+            </div>
+          </div>
+        </div>
 
         <form id="pitchForm" class="pitch-form">
-          <p class="required-note">
-            Video upload is required. All other fields are optional.
-          </p>
-
-          <label>
-            Pitch Video
-            <input
-              id="videoFile"
-              name="videoFile"
-              type="file"
-              accept="video/*"
-              required
-            />
-          </label>
-
           <label>
             Title
-            <input id="title" name="title" placeholder="RetailPulse" />
-          </label>
-
-          <label>
-            Transcript
-            <textarea
-              id="transcript"
-              name="transcript"
-              rows="8"
-              placeholder="Optional transcript for better results"
-            ></textarea>
-          </label>
-
-          <label>
-            Language Hint
             <input
-              id="languageHint"
-              name="languageHint"
-              placeholder="en"
-              value="en"
+              id="title"
+              name="title"
+              required
+              placeholder="Ex: RetailPulse"
             />
           </label>
 
@@ -103,7 +85,7 @@
               id="slideText"
               name="slideText"
               rows="4"
-              placeholder="Problem\nSolution\nTraction"
+              placeholder="Problem&#10;Solution&#10;Traction"
             ></textarea>
           </label>
 
@@ -138,16 +120,13 @@
             <button id="evaluateBtn" class="primary-btn" type="submit">
               Evaluate Pitch
             </button>
-            <button id="refreshBtn" class="ghost-btn" type="button">
-              Refresh Status
-            </button>
             <span id="statusText" class="status-text" aria-live="polite"></span>
           </div>
         </form>
 
         <article class="pitch-preview" id="pitchPreview">
           <h3>Pitch Snapshot</h3>
-          <p>Upload a video to preview the submission summary.</p>
+          <p>Fill the form to preview your startup pitch summary.</p>
         </article>
       </section>
 
@@ -155,8 +134,29 @@
         <div class="panel-header">
           <h2>Evaluation Output</h2>
           <p>
-            Read the score, strengths, weaknesses, and the raw API response.
+            Read the core score, metrics, modality weights, and chunk-level
+            insights.
           </p>
+        </div>
+
+        <!-- Video Completion Rating Panel -->
+        <div id="videoRatingPanel" class="video-rating-panel hidden">
+          <div class="rating-header">
+            <h3>Video Complete!</h3>
+            <p class="rating-subtitle">Startup Rating Available</p>
+          </div>
+          <div class="rating-content">
+            <div class="rating-badge" id="ratingBadge">
+              <span class="rating-score" id="finalScore">--</span>
+              <span class="rating-label">/10</span>
+            </div>
+            <div class="rating-details">
+              <p><strong id="videoRatingBand">--</strong></p>
+              <p id="videoRatingText" class="rating-text">
+                Evaluation results ready
+              </p>
+            </div>
+          </div>
         </div>
 
         <article id="evaluationPlaceholder" class="placeholder">
@@ -183,24 +183,29 @@
 
           <section class="result-grid">
             <div>
-              <h3>Strengths</h3>
-              <div id="strengthsList" class="list-card"></div>
+              <h3>Quantitative Scores</h3>
+              <div id="quantScores" class="chart-card"></div>
             </div>
             <div>
-              <h3>Weaknesses</h3>
-              <div id="weaknessesList" class="list-card"></div>
+              <h3>Modality Weights</h3>
+              <div id="modalityWeights" class="chart-card"></div>
             </div>
           </section>
 
           <section class="result-grid result-grid-lower">
             <div>
-              <h3>Suggestions</h3>
-              <div id="suggestionsList" class="list-card"></div>
+              <h3>Risk Distribution</h3>
+              <div id="riskDistribution" class="list-card"></div>
             </div>
             <div>
-              <h3>Notes</h3>
-              <div id="notesList" class="list-card"></div>
+              <h3>Guidance</h3>
+              <div id="guidanceList" class="list-card"></div>
             </div>
+          </section>
+
+          <section>
+            <h3>Chunk Insights</h3>
+            <div id="chunkReports" class="chunks"></div>
           </section>
 
           <section class="raw-json-wrap">
