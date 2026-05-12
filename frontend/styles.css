@@ -590,6 +590,43 @@ textarea:focus {
   font-size: 0.92rem;
 }
 
+.video-upload-input {
+  padding: 0.7rem;
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(203, 90, 51, 0.05) 0%,
+    rgba(203, 90, 51, 0.02) 100%
+  );
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.video-upload-input:hover {
+  border-color: var(--accent-deep);
+  background: linear-gradient(
+    135deg,
+    rgba(203, 90, 51, 0.08) 0%,
+    rgba(203, 90, 51, 0.04) 100%
+  );
+}
+
+.video-upload-input:focus {
+  outline: none;
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(203, 90, 51, 0.15);
+}
+
+.video-selector-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .video-select {
   padding: 0.7rem;
   border: 1px solid var(--panel-border);

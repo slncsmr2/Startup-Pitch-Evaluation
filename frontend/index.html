@@ -47,7 +47,16 @@
         <!-- Video Player Section -->
         <div class="video-section">
           <div class="video-header">
-            <label for="videoSelect">Load Video</label>
+            <label for="videoUpload">Attach Video</label>
+            <input
+              id="videoUpload"
+              type="file"
+              accept="video/*"
+              class="video-upload-input"
+            />
+          </div>
+          <div class="video-selector-group hidden" id="videoSelectorGroup">
+            <label for="videoSelect">Or Load Video</label>
             <select id="videoSelect" class="video-select">
               <option value="">Select a video...</option>
             </select>
