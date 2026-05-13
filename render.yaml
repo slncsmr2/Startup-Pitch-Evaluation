@@ -1,8 +1,27 @@
 services:
   - type: web
+
     name: pitch-eval-backend
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      pip install -r requirements.txt
+      apt-get update && apt-get install -y ffmpeg libsm6 libxext6 libxrender-dev
+      bash init_deployment.sh
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     plan: free
+    envVars:
+      - key: SPE_USE_HEURISTIC_PIPELINE
+        value: "true"
+      - key: SPE_USE_LOCAL_TRANSCRIBER
+        value: "true"
+      - key: SPE_ENABLE_VISUAL_EXTRACTION
+        value: "true"
+      - key: SPE_ENABLE_AUDIO_EXTRACTION
+        value: "true"
+      - key: SPE_FASTER_WHISPER_DEVICE
+        value: "cpu"
+      - key: SPE_FASTER_WHISPER_COMPUTE_TYPE
+        value: "int8"
+      - key: SPE_MEDIA_LOOKUP_DIR
+        value: "outputs/batch_input"

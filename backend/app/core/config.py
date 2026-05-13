@@ -34,5 +34,26 @@ class Settings(BaseSettings):
         env_prefix="SPE_",
     )
 
+    @property
+    def backend_root(self) -> Path:
+        """Returns the backend root directory"""
+        return _BACKEND_ROOT
+    
+    @property
+    def checkpoint_full_path(self) -> Path:
+        """Resolve checkpoint path from backend root"""
+        path = Path(self.nn_checkpoint_path)
+        if not path.is_absolute():
+            return _BACKEND_ROOT / path
+        return path
+    
+    @property
+    def media_lookup_full_path(self) -> Path:
+        """Resolve media directory from backend root"""
+        path = Path(self.media_lookup_dir)
+        if not path.is_absolute():
+            return _BACKEND_ROOT / path
+        return path
+
 
 settings = Settings()
